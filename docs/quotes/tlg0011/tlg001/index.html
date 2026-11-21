@@ -69,6 +69,22 @@
       <button class="nav-button" id="next-chunk" type="button">Next scene</button>
     </nav>
 
+    <section class="overview-panel" aria-labelledby="overview-title">
+      <div class="overview-heading">
+        <div>
+          <p class="eyebrow">Whole-work distribution</p>
+          <h2 id="overview-title">Reuse overview</h2>
+        </div>
+        <p><span id="overview-language">All languages</span> · select a region to move between scenes</p>
+      </div>
+      <canvas id="reuse-overview" height="112" aria-label="Reuse density across the complete work"></canvas>
+      <div class="overview-scale" aria-hidden="true">
+        <span>Line 1</span>
+        <strong id="overview-selection">Current scene: 1–93</strong>
+        <span>Line 1278</span>
+      </div>
+    </section>
+
     <section class="workspace">
       <article class="text-panel" aria-labelledby="chunk-title">
         <div class="panel-heading">
@@ -81,10 +97,11 @@
           </div>
         </div>
         <p class="chunk-summary" id="chunk-summary" aria-live="polite"></p>
-        <div class="legend" aria-label="Reuse density legend">
-          <span><i class="density none"></i>No match</span>
-          <span><i class="density low"></i>Some reuse</span>
-          <span><i class="density high"></i>Frequent reuse</span>
+        <div class="legend" aria-label="Word-level reuse heatmap legend">
+          <strong>Word-level heatmap</strong>
+          <span><i class="word-swatch heat-0"></i>No match</span>
+          <span><i class="word-swatch heat-1"></i>Some reuse</span>
+          <span><i class="word-swatch heat-4"></i>Frequent reuse</span>
         </div>
         <ol class="greek-text" id="greek-text" aria-label="Greek text"></ol>
       </article>

@@ -27,6 +27,9 @@
     greekText: document.querySelector("#greek-text"),
     languageFilter: document.querySelector("#language-filter"),
     nextChunk: document.querySelector("#next-chunk"),
+    overview: document.querySelector("#reuse-overview"),
+    overviewLanguage: document.querySelector("#overview-language"),
+    overviewSelection: document.querySelector("#overview-selection"),
     previousChunk: document.querySelector("#previous-chunk"),
     reuseList: document.querySelector("#reuse-list"),
     sceneCount: document.querySelector("#scene-count"),
@@ -77,12 +80,23 @@
     );
   }
 
-  function densityClass(count, max) {
-    if (!count) return "density-0";
-    const ratio = count / Math.max(max, 1);
-    if (ratio >= 0.66) return "density-3";
-    if (ratio >= 0.25) return "density-2";
-    return "density-1";
+  function heatClass(count, thresholds) {
+    if (!count) return "heat-0";
+    if (count >= thresholds[2]) return "heat-4";
+    if (count >= thresholds[1]) return "heat-3";
+    if (count >= thresholds[0]) return "heat-2";
+    return "heat-1";
+  }
+
+  function heatThresholds(tokenized) {
+    const counts = tokenized
+      .flatMap(({ tokens }) => tokens.map(({ count }) => count))
+      .filter(Boolean)
+      .sort((a, b) => a - b);
+    if (!counts.length) return [1, 1, 1];
+    return [0.25, 0.5, 0.75].map((quantile) =>
+      counts[Math.min(counts.length - 1, Math.floor((counts.length - 1) * quantile))]
+    );
   }
 
   function passageUrn(chunk) {
@@ -92,12 +106,24 @@
   function renderText(chunk, matches) {
     const selected = chunkLines(chunk);
     const counts = selected.map((line) => lineMatchCount(line, matches));
-    const max = Math.max(...counts, 1);
+    const tokenized = selected.map((line) => {
+      const raw = sequence.data.slice(line.start, line.stop + 1);
+      const tokens = [...raw.matchAll(/\S+/gu)].map((match) => {
+        const start = line.start + match.index;
+        const stop = start + match[0].length - 1;
+        const count = matches.reduce(
+          (total, item) => total + (overlaps(start, stop, item.note.start, item.note.stop) ? 1 : 0),
+          0
+        );
+        return { text: match[0], start: match.index, stop: match.index + match[0].length, count };
+      });
+      return { raw, tokens };
+    });
+    const thresholds = heatThresholds(tokenized);
 
     elements.greekText.replaceChildren(
       ...selected.map((line, index) => {
         const item = document.createElement("li");
-        item.className = densityClass(counts[index], max);
         item.dataset.line = line.id;
         item.dataset.matches = String(counts[index]);
         item.title = counts[index]
@@ -111,7 +137,24 @@
         const text = document.createElement("span");
         text.className = "line-text";
         text.lang = "grc";
-        text.textContent = sequence.data.slice(line.start, line.stop + 1).trim();
+        let cursor = 0;
+        tokenized[index].tokens.forEach((token) => {
+          if (token.start > cursor) {
+            text.append(document.createTextNode(tokenized[index].raw.slice(cursor, token.start)));
+          }
+          const word = document.createElement("span");
+          word.className = `word-heat ${heatClass(token.count, thresholds)}`;
+          word.textContent = token.text;
+          word.title = token.count
+            ? `${token.count} reuse ${token.count === 1 ? "passage overlaps" : "passages overlap"} this word`
+            : "No detected reuse overlaps this word";
+          word.dataset.matches = String(token.count);
+          text.append(word);
+          cursor = token.stop;
+        });
+        if (cursor < tokenized[index].raw.length) {
+          text.append(document.createTextNode(tokenized[index].raw.slice(cursor)));
+        }
 
         const count = document.createElement("span");
         count.className = "line-count";
@@ -122,6 +165,98 @@
         return item;
       })
     );
+  }
+
+  function matchesInLanguage(matches) {
+    return state.language === "all"
+      ? matches
+      : matches.filter(({ track }) => track.lang === state.language);
+  }
+
+  function renderOverview() {
+    const canvas = elements.overview;
+    const width = Math.max(canvas.clientWidth, 320);
+    const height = 112;
+    const ratio = window.devicePixelRatio || 1;
+    canvas.width = Math.round(width * ratio);
+    canvas.height = Math.round(height * ratio);
+    const context = canvas.getContext("2d");
+    context.scale(ratio, ratio);
+    context.clearRect(0, 0, width, height);
+
+    const bins = Math.max(160, Math.floor(width / 3));
+    const changes = new Int32Array(bins + 1);
+    const textLength = sequence.data.length;
+    tracks.forEach((track) => {
+      if (state.language !== "all" && track.lang !== state.language) return;
+      track.notes.forEach((note) => {
+        const start = Math.max(0, Math.min(bins - 1, Math.floor(note.start / textLength * bins)));
+        const end = Math.max(start, Math.min(bins - 1, Math.floor(note.stop / textLength * bins)));
+        changes[start] += 1;
+        changes[end + 1] -= 1;
+      });
+    });
+
+    const values = new Uint32Array(bins);
+    let running = 0;
+    let maximum = 1;
+    for (let index = 0; index < bins; index += 1) {
+      running += changes[index];
+      values[index] = running;
+      maximum = Math.max(maximum, running);
+    }
+
+    const bandHeight = 21;
+    sceneChunks.forEach((chunk, index) => {
+      const bounds = chunkBounds(chunk);
+      const left = bounds.start / textLength * width;
+      const right = (bounds.stop + 1) / textLength * width;
+      context.fillStyle = index % 2 ? "#dce5e9" : "#c7d7dc";
+      context.fillRect(left, 0, Math.max(1, right - left), bandHeight);
+      if (right - left > 23) {
+        context.fillStyle = "#40515d";
+        context.font = "700 10px system-ui";
+        context.textAlign = "center";
+        context.fillText(String(index + 1), (left + right) / 2, 14);
+      }
+    });
+
+    const selectedBounds = chunkBounds(sceneChunks[state.chunk]);
+    const selectionLeft = selectedBounds.start / textLength * width;
+    const selectionRight = (selectedBounds.stop + 1) / textLength * width;
+    context.fillStyle = "rgba(47, 111, 145, 0.2)";
+    context.fillRect(selectionLeft, 0, Math.max(2, selectionRight - selectionLeft), height);
+
+    const chartTop = 31;
+    const chartBottom = height - 8;
+    const chartHeight = chartBottom - chartTop;
+    context.beginPath();
+    context.moveTo(0, chartBottom);
+    values.forEach((value, index) => {
+      const x = index / (bins - 1) * width;
+      const normalized = Math.log1p(value) / Math.log1p(maximum);
+      context.lineTo(x, chartBottom - normalized * chartHeight);
+    });
+    context.lineTo(width, chartBottom);
+    context.closePath();
+    const gradient = context.createLinearGradient(0, chartTop, 0, chartBottom);
+    gradient.addColorStop(0, "#14827a");
+    gradient.addColorStop(1, "#55aaa1");
+    context.fillStyle = gradient;
+    context.fill();
+
+    context.strokeStyle = "#0e625d";
+    context.lineWidth = 1;
+    context.stroke();
+    context.strokeStyle = "#2f6f91";
+    context.lineWidth = 2;
+    context.strokeRect(selectionLeft, 1, Math.max(2, selectionRight - selectionLeft), height - 2);
+
+    elements.overviewLanguage.textContent = state.language === "all"
+      ? "All languages"
+      : (languageNames[state.language] || state.language);
+    const chunk = sceneChunks[state.chunk];
+    elements.overviewSelection.textContent = `Current scene: ${chunk.start}–${chunk.end}`;
   }
 
   function filteredMatches(matches) {
@@ -189,13 +324,15 @@
   function render() {
     const chunk = sceneChunks[state.chunk];
     const matches = matchesForChunk(chunk);
+    const heatMatches = matchesInLanguage(matches);
     elements.chunkSelect.value = String(state.chunk);
     elements.chunkKind.textContent = `Scene ${state.chunk + 1} · ${chunk.type}`;
     elements.chunkTitle.textContent = `Lines ${chunk.start}–${chunk.end}`;
-    elements.chunkSummary.textContent = `${matches.length.toLocaleString()} detected reuse passages in ${new Set(matches.map(({ track }) => track.id)).size.toLocaleString()} books overlap this scene.`;
+    elements.chunkSummary.textContent = `${heatMatches.length.toLocaleString()} detected reuse passages in ${new Set(heatMatches.map(({ track }) => track.id)).size.toLocaleString()} books overlap this scene${state.language === "all" ? "" : ` in ${languageNames[state.language] || state.language}`}.`;
     elements.previousChunk.disabled = state.chunk === 0;
     elements.nextChunk.disabled = state.chunk === sceneChunks.length - 1;
-    renderText(chunk, matches);
+    renderOverview();
+    renderText(chunk, heatMatches);
     renderMatches(matches);
     updateHash();
   }
@@ -278,6 +415,20 @@
     renderMatches(matchesForChunk(sceneChunks[state.chunk]));
   });
 
+  elements.overview.addEventListener("click", (event) => {
+    const rect = elements.overview.getBoundingClientRect();
+    const character = Math.round((event.clientX - rect.left) / rect.width * sequence.data.length);
+    const nextChunk = sceneChunks.findIndex((chunk) => {
+      const bounds = chunkBounds(chunk);
+      return character >= bounds.start && character <= bounds.stop;
+    });
+    if (nextChunk >= 0) {
+      state.chunk = nextChunk;
+      state.limit = PAGE_SIZE;
+      render();
+    }
+  });
+
   elements.copyCitation.addEventListener("click", async () => {
     const citation = passageUrn(sceneChunks[state.chunk]);
     try {
@@ -293,6 +444,8 @@
     readHash();
     render();
   });
+
+  new ResizeObserver(() => renderOverview()).observe(elements.overview);
 
   populateControls();
   readHash();
