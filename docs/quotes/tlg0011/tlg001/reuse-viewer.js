@@ -15,7 +15,7 @@
     ...tracks15, ...tracks16, ...tracks17, ...tracks18, ...tracks19
   ];
   const lines = structure[0].notes;
-  const state = { chunk: 0, language: "all", query: "", limit: PAGE_SIZE };
+  const state = { chunk: 0, language: "all", source: "quotations", query: "", limit: PAGE_SIZE };
 
   const elements = {
     bookFilter: document.querySelector("#book-filter"),
@@ -34,6 +34,7 @@
     reuseList: document.querySelector("#reuse-list"),
     sceneCount: document.querySelector("#scene-count"),
     showMore: document.querySelector("#show-more"),
+    sourceFilter: document.querySelector("#source-filter"),
     totalReuseCount: document.querySelector("#total-reuse-count"),
     visibleReuseCount: document.querySelector("#visible-reuse-count")
   };
@@ -55,6 +56,47 @@
 
   function overlaps(aStart, aStop, bStart, bStop) {
     return aStart <= bStop && aStop >= bStart;
+  }
+
+  function classifyTrack(track) {
+    const spans = track.notes
+      .map((note) => [Math.max(0, note.start), Math.min(sequence.data.length - 1, note.stop)])
+      .sort((a, b) => a[0] - b[0]);
+    let covered = 0;
+    let currentStart = null;
+    let currentStop = null;
+    spans.forEach(([start, stop]) => {
+      if (currentStart === null) {
+        currentStart = start;
+        currentStop = stop;
+      } else if (start <= currentStop + 1) {
+        currentStop = Math.max(currentStop, stop);
+      } else {
+        covered += currentStop - currentStart + 1;
+        currentStart = start;
+        currentStop = stop;
+      }
+    });
+    if (currentStart !== null) covered += currentStop - currentStart + 1;
+
+    const coverage = covered / sequence.data.length;
+    const first = spans.length ? spans[0][0] / sequence.data.length : 1;
+    const last = spans.length ? spans.reduce((maximum, span) => Math.max(maximum, span[1]), 0) / sequence.data.length : 0;
+    track.coverage = coverage;
+    track.isEdition = coverage >= 0.6 && first <= 0.05 && last >= 0.95;
+  }
+
+  tracks.forEach(classifyTrack);
+
+  function sourceMatches(track) {
+    if (state.source === "all") return true;
+    return state.source === "editions" ? track.isEdition : !track.isEdition;
+  }
+
+  function scopeLabel() {
+    if (state.source === "editions") return "full editions";
+    if (state.source === "all") return "all books";
+    return "quotation sources";
   }
 
   function matchesForChunk(chunk) {
@@ -167,10 +209,10 @@
     );
   }
 
-  function matchesInLanguage(matches) {
-    return state.language === "all"
-      ? matches
-      : matches.filter(({ track }) => track.lang === state.language);
+  function matchesInScope(matches) {
+    return matches.filter(({ track }) =>
+      sourceMatches(track) && (state.language === "all" || track.lang === state.language)
+    );
   }
 
   function renderOverview() {
@@ -188,6 +230,7 @@
     const changes = new Int32Array(bins + 1);
     const textLength = sequence.data.length;
     tracks.forEach((track) => {
+      if (!sourceMatches(track)) return;
       if (state.language !== "all" && track.lang !== state.language) return;
       track.notes.forEach((note) => {
         const start = Math.max(0, Math.min(bins - 1, Math.floor(note.start / textLength * bins)));
@@ -252,9 +295,10 @@
     context.lineWidth = 2;
     context.strokeRect(selectionLeft, 1, Math.max(2, selectionRight - selectionLeft), height - 2);
 
-    elements.overviewLanguage.textContent = state.language === "all"
+    const language = state.language === "all"
       ? "All languages"
       : (languageNames[state.language] || state.language);
+    elements.overviewLanguage.textContent = `${language} · ${scopeLabel()}`;
     const chunk = sceneChunks[state.chunk];
     elements.overviewSelection.textContent = `Current scene: ${chunk.start}–${chunk.end}`;
   }
@@ -263,8 +307,9 @@
     const query = state.query.trim().toLocaleLowerCase();
     return matches.filter(({ track }) => {
       const languageMatches = state.language === "all" || track.lang === state.language;
+      const sourceTypeMatches = sourceMatches(track);
       const queryMatches = !query || `${track.name} ${track.date}`.toLocaleLowerCase().includes(query);
-      return languageMatches && queryMatches;
+      return sourceTypeMatches && languageMatches && queryMatches;
     });
   }
 
@@ -283,7 +328,7 @@
     if (!visible.length) {
       const empty = document.createElement("div");
       empty.className = "empty-state";
-      empty.innerHTML = "<strong>No matching books</strong><span>Try another language or search term.</span>";
+      empty.innerHTML = "<strong>No matching books</strong><span>Try another source type, language, or search term.</span>";
       elements.reuseList.replaceChildren(empty);
     } else {
       elements.reuseList.replaceChildren(
@@ -293,7 +338,8 @@
 
           const meta = document.createElement("p");
           meta.className = "reuse-meta";
-          meta.textContent = `${lineRangeForNote(note)} · ${languageNames[track.lang] || track.lang} · ${track.date || "Undated"}`;
+          const sourceType = track.isEdition ? "Full edition" : "Quotation";
+          meta.textContent = `${lineRangeForNote(note)} · ${sourceType} · ${languageNames[track.lang] || track.lang} · ${track.date || "Undated"}`;
 
           const title = document.createElement("h3");
           title.textContent = track.name;
@@ -318,17 +364,22 @@
     const params = new URLSearchParams();
     params.set("scene", String(state.chunk + 1));
     if (state.language !== "all") params.set("lang", state.language);
+    if (state.source !== "quotations") params.set("source", state.source);
     history.replaceState(null, "", `#${params.toString()}`);
   }
 
   function render() {
     const chunk = sceneChunks[state.chunk];
     const matches = matchesForChunk(chunk);
-    const heatMatches = matchesInLanguage(matches);
+    const heatMatches = matchesInScope(matches);
     elements.chunkSelect.value = String(state.chunk);
     elements.chunkKind.textContent = `Scene ${state.chunk + 1} · ${chunk.type}`;
     elements.chunkTitle.textContent = `Lines ${chunk.start}–${chunk.end}`;
-    elements.chunkSummary.textContent = `${heatMatches.length.toLocaleString()} detected reuse passages in ${new Set(heatMatches.map(({ track }) => track.id)).size.toLocaleString()} books overlap this scene${state.language === "all" ? "" : ` in ${languageNames[state.language] || state.language}`}.`;
+    elements.chunkSummary.textContent = `${heatMatches.length.toLocaleString()} detected reuse passages in ${new Set(heatMatches.map(({ track }) => track.id)).size.toLocaleString()} ${scopeLabel()} overlap this scene${state.language === "all" ? "" : ` in ${languageNames[state.language] || state.language}`}.`;
+    elements.totalReuseCount.textContent = tracks
+      .filter((track) => sourceMatches(track) && (state.language === "all" || track.lang === state.language))
+      .reduce((total, track) => total + track.notes.length, 0)
+      .toLocaleString();
     elements.previousChunk.disabled = state.chunk === 0;
     elements.nextChunk.disabled = state.chunk === sceneChunks.length - 1;
     renderOverview();
@@ -362,19 +413,21 @@
       })
     );
 
-    elements.totalReuseCount.textContent = tracks
-      .reduce((total, track) => total + track.notes.length, 0)
-      .toLocaleString();
   }
 
   function readHash() {
     const params = new URLSearchParams(location.hash.slice(1));
     const requestedScene = Number.parseInt(params.get("scene"), 10);
     const requestedLanguage = params.get("lang");
+    const requestedSource = params.get("source");
     if (requestedScene >= 1 && requestedScene <= sceneChunks.length) state.chunk = requestedScene - 1;
     if (requestedLanguage && (requestedLanguage === "all" || tracks.some((track) => track.lang === requestedLanguage))) {
       state.language = requestedLanguage;
       elements.languageFilter.value = requestedLanguage;
+    }
+    if (["quotations", "all", "editions"].includes(requestedSource)) {
+      state.source = requestedSource;
+      elements.sourceFilter.value = requestedSource;
     }
   }
 
@@ -400,6 +453,12 @@
 
   elements.languageFilter.addEventListener("change", (event) => {
     state.language = event.target.value;
+    state.limit = PAGE_SIZE;
+    render();
+  });
+
+  elements.sourceFilter.addEventListener("change", (event) => {
+    state.source = event.target.value;
     state.limit = PAGE_SIZE;
     render();
   });
