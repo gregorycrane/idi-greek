@@ -58,6 +58,10 @@
     return aStart <= bStop && aStop >= bStart;
   }
 
+  function displayGreek(value) {
+    return value.normalize("NFC");
+  }
+
   function classifyTrack(track) {
     const spans = track.notes
       .map((note) => [Math.max(0, note.start), Math.min(sequence.data.length - 1, note.stop)])
@@ -192,7 +196,7 @@
           if (state.word && state.word.start === wordStart && state.word.stop === wordStop) {
             word.classList.add("is-selected");
           }
-          word.textContent = token.text;
+          word.textContent = displayGreek(token.text);
           word.title = token.count
             ? `${token.count} reuse ${token.count === 1 ? "passage overlaps" : "passages overlap"} this word; select to inspect`
             : "No detected reuse overlaps this word; select to confirm";
@@ -201,7 +205,7 @@
           word.dataset.stop = String(wordStop);
           word.dataset.line = line.id;
           word.setAttribute("aria-pressed", String(Boolean(state.word && state.word.start === wordStart && state.word.stop === wordStop)));
-          word.setAttribute("aria-label", `${token.text}, ${token.count} matching ${token.count === 1 ? "passage" : "passages"}; show passages`);
+          word.setAttribute("aria-label", `${displayGreek(token.text)}, ${token.count} matching ${token.count === 1 ? "passage" : "passages"}; show passages`);
           text.append(word);
           cursor = token.stop;
         });
@@ -358,16 +362,16 @@
     const leadingEllipsis = displayStart > note.start ? "… " : "";
     const trailingEllipsis = displayStop < note.stop ? " …" : "";
     if (!selectedOverlap) {
-      quote.textContent = `${leadingEllipsis}${sequence.data.slice(displayStart, displayStop + 1)}${trailingEllipsis}`;
+      quote.textContent = displayGreek(`${leadingEllipsis}${sequence.data.slice(displayStart, displayStop + 1)}${trailingEllipsis}`);
       return quote;
     }
 
     const highlightStart = Math.max(displayStart, state.word.start);
     const highlightStop = Math.min(displayStop, state.word.stop);
-    quote.append(document.createTextNode(leadingEllipsis + sequence.data.slice(displayStart, highlightStart)));
+    quote.append(document.createTextNode(displayGreek(leadingEllipsis + sequence.data.slice(displayStart, highlightStart))));
     const selected = document.createElement("mark");
-    selected.textContent = sequence.data.slice(highlightStart, highlightStop + 1);
-    quote.append(selected, document.createTextNode(sequence.data.slice(highlightStop + 1, displayStop + 1) + trailingEllipsis));
+    selected.textContent = displayGreek(sequence.data.slice(highlightStart, highlightStop + 1));
+    quote.append(selected, document.createTextNode(displayGreek(sequence.data.slice(highlightStop + 1, displayStop + 1) + trailingEllipsis)));
     return quote;
   }
 
@@ -502,7 +506,7 @@
       const stop = Number(wordBounds[2]);
       const line = lines.find((item) => overlaps(item.start, item.stop, start, stop));
       if (line && start <= stop && stop < sequence.data.length) {
-        state.word = { start, stop, text: sequence.data.slice(start, stop + 1), line: line.id };
+        state.word = { start, stop, text: displayGreek(sequence.data.slice(start, stop + 1)), line: line.id };
       }
     }
   }
