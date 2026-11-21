@@ -102,6 +102,7 @@
           <span><i class="word-swatch heat-0"></i>No match</span>
           <span><i class="word-swatch heat-1"></i>Some reuse</span>
           <span><i class="word-swatch heat-4"></i>Frequent reuse</span>
+          <em>Select a word to inspect its passages.</em>
         </div>
         <ol class="greek-text" id="greek-text" aria-label="Greek text"></ol>
       </article>
@@ -132,6 +133,11 @@
             <span>Find a book</span>
             <input id="book-filter" type="search" placeholder="Title or date">
           </label>
+        </div>
+
+        <div class="word-selection" id="word-selection" hidden>
+          <span>Passages quoting <strong id="selected-word"></strong></span>
+          <button id="clear-word" type="button">Show whole scene</button>
         </div>
 
         <div class="reuse-list" id="reuse-list" aria-live="polite"></div>

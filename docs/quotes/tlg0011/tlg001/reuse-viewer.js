@@ -15,7 +15,7 @@
     ...tracks15, ...tracks16, ...tracks17, ...tracks18, ...tracks19
   ];
   const lines = structure[0].notes;
-  const state = { chunk: 0, language: "all", source: "quotations", query: "", limit: PAGE_SIZE };
+  const state = { chunk: 0, language: "all", source: "quotations", query: "", word: null, limit: PAGE_SIZE };
 
   const elements = {
     bookFilter: document.querySelector("#book-filter"),
@@ -23,6 +23,7 @@
     chunkSelect: document.querySelector("#chunk-select"),
     chunkSummary: document.querySelector("#chunk-summary"),
     chunkTitle: document.querySelector("#chunk-title"),
+    clearWord: document.querySelector("#clear-word"),
     copyCitation: document.querySelector("#copy-citation"),
     greekText: document.querySelector("#greek-text"),
     languageFilter: document.querySelector("#language-filter"),
@@ -33,10 +34,12 @@
     previousChunk: document.querySelector("#previous-chunk"),
     reuseList: document.querySelector("#reuse-list"),
     sceneCount: document.querySelector("#scene-count"),
+    selectedWord: document.querySelector("#selected-word"),
     showMore: document.querySelector("#show-more"),
     sourceFilter: document.querySelector("#source-filter"),
     totalReuseCount: document.querySelector("#total-reuse-count"),
-    visibleReuseCount: document.querySelector("#visible-reuse-count")
+    visibleReuseCount: document.querySelector("#visible-reuse-count"),
+    wordSelection: document.querySelector("#word-selection")
   };
 
   function chunkLines(chunk) {
@@ -181,16 +184,27 @@
         text.lang = "grc";
         let cursor = 0;
         tokenized[index].tokens.forEach((token) => {
+          const wordStart = line.start + token.start;
+          const wordStop = line.start + token.stop - 1;
           if (token.start > cursor) {
             text.append(document.createTextNode(tokenized[index].raw.slice(cursor, token.start)));
           }
-          const word = document.createElement("span");
+          const word = document.createElement("button");
+          word.type = "button";
           word.className = `word-heat ${heatClass(token.count, thresholds)}`;
+          if (state.word && state.word.start === wordStart && state.word.stop === wordStop) {
+            word.classList.add("is-selected");
+          }
           word.textContent = token.text;
           word.title = token.count
-            ? `${token.count} reuse ${token.count === 1 ? "passage overlaps" : "passages overlap"} this word`
-            : "No detected reuse overlaps this word";
+            ? `${token.count} reuse ${token.count === 1 ? "passage overlaps" : "passages overlap"} this word; select to inspect`
+            : "No detected reuse overlaps this word; select to confirm";
           word.dataset.matches = String(token.count);
+          word.dataset.start = String(wordStart);
+          word.dataset.stop = String(wordStop);
+          word.dataset.line = line.id;
+          word.setAttribute("aria-pressed", String(Boolean(state.word && state.word.start === wordStart && state.word.stop === wordStop)));
+          word.setAttribute("aria-label", `${token.text}, ${token.count} matching ${token.count === 1 ? "passage" : "passages"}; show passages`);
           text.append(word);
           cursor = token.stop;
         });
@@ -305,11 +319,12 @@
 
   function filteredMatches(matches) {
     const query = state.query.trim().toLocaleLowerCase();
-    return matches.filter(({ track }) => {
+    return matches.filter(({ track, note }) => {
       const languageMatches = state.language === "all" || track.lang === state.language;
       const sourceTypeMatches = sourceMatches(track);
+      const wordMatches = !state.word || overlaps(note.start, note.stop, state.word.start, state.word.stop);
       const queryMatches = !query || `${track.name} ${track.date}`.toLocaleLowerCase().includes(query);
-      return sourceTypeMatches && languageMatches && queryMatches;
+      return sourceTypeMatches && languageMatches && wordMatches && queryMatches;
     });
   }
 
@@ -324,6 +339,10 @@
     const filtered = filteredMatches(matches);
     const visible = filtered.slice(0, state.limit);
     elements.visibleReuseCount.textContent = filtered.length.toLocaleString();
+    elements.wordSelection.hidden = !state.word;
+    if (state.word) {
+      elements.selectedWord.textContent = `“${state.word.text}” (line ${state.word.line})`;
+    }
 
     if (!visible.length) {
       const empty = document.createElement("div");
@@ -365,6 +384,7 @@
     params.set("scene", String(state.chunk + 1));
     if (state.language !== "all") params.set("lang", state.language);
     if (state.source !== "quotations") params.set("source", state.source);
+    if (state.word) params.set("word", `${state.word.start}-${state.word.stop}`);
     history.replaceState(null, "", `#${params.toString()}`);
   }
 
@@ -420,6 +440,7 @@
     const requestedScene = Number.parseInt(params.get("scene"), 10);
     const requestedLanguage = params.get("lang");
     const requestedSource = params.get("source");
+    const requestedWord = params.get("word");
     if (requestedScene >= 1 && requestedScene <= sceneChunks.length) state.chunk = requestedScene - 1;
     if (requestedLanguage && (requestedLanguage === "all" || tracks.some((track) => track.lang === requestedLanguage))) {
       state.language = requestedLanguage;
@@ -429,10 +450,20 @@
       state.source = requestedSource;
       elements.sourceFilter.value = requestedSource;
     }
+    const wordBounds = requestedWord && requestedWord.match(/^(\d+)-(\d+)$/);
+    if (wordBounds) {
+      const start = Number(wordBounds[1]);
+      const stop = Number(wordBounds[2]);
+      const line = lines.find((item) => overlaps(item.start, item.stop, start, stop));
+      if (line && start <= stop && stop < sequence.data.length) {
+        state.word = { start, stop, text: sequence.data.slice(start, stop + 1), line: line.id };
+      }
+    }
   }
 
   elements.previousChunk.addEventListener("click", () => {
     state.chunk = Math.max(0, state.chunk - 1);
+    state.word = null;
     state.limit = PAGE_SIZE;
     render();
     scrollTo({ top: document.querySelector(".chunk-nav").offsetTop - 12, behavior: "smooth" });
@@ -440,6 +471,7 @@
 
   elements.nextChunk.addEventListener("click", () => {
     state.chunk = Math.min(sceneChunks.length - 1, state.chunk + 1);
+    state.word = null;
     state.limit = PAGE_SIZE;
     render();
     scrollTo({ top: document.querySelector(".chunk-nav").offsetTop - 12, behavior: "smooth" });
@@ -447,6 +479,7 @@
 
   elements.chunkSelect.addEventListener("change", (event) => {
     state.chunk = Number(event.target.value);
+    state.word = null;
     state.limit = PAGE_SIZE;
     render();
   });
@@ -474,6 +507,25 @@
     renderMatches(matchesForChunk(sceneChunks[state.chunk]));
   });
 
+  elements.greekText.addEventListener("click", (event) => {
+    const target = event.target.closest(".word-heat");
+    if (!target) return;
+    const start = Number(target.dataset.start);
+    const stop = Number(target.dataset.stop);
+    const alreadySelected = state.word && state.word.start === start && state.word.stop === stop;
+    state.word = alreadySelected
+      ? null
+      : { start, stop, text: target.textContent, line: target.dataset.line };
+    state.limit = PAGE_SIZE;
+    render();
+  });
+
+  elements.clearWord.addEventListener("click", () => {
+    state.word = null;
+    state.limit = PAGE_SIZE;
+    render();
+  });
+
   elements.overview.addEventListener("click", (event) => {
     const rect = elements.overview.getBoundingClientRect();
     const character = Math.round((event.clientX - rect.left) / rect.width * sequence.data.length);
@@ -483,6 +535,7 @@
     });
     if (nextChunk >= 0) {
       state.chunk = nextChunk;
+      state.word = null;
       state.limit = PAGE_SIZE;
       render();
     }

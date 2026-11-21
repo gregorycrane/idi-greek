@@ -140,6 +140,7 @@ select:focus, input:focus, button:focus-visible { outline: 3px solid rgba(47,111
 .legend { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; margin-bottom: 1.4rem; color: var(--muted); font-size: .78rem; }
 .legend span { display: flex; align-items: center; gap: .35rem; }
 .legend strong { color: var(--navy); font-size: .75rem; letter-spacing: .04em; text-transform: uppercase; }
+.legend em { margin-left: auto; color: var(--muted); font-size: .78rem; font-style: normal; }
 .word-swatch { display: inline-block; width: 1.3rem; height: 1rem; border-radius: 3px; }
 
 .greek-text { margin: 0; padding: 0; list-style: none; font-family: "New Athena Unicode", "Noto Serif", Georgia, serif; }
@@ -148,8 +149,10 @@ select:focus, input:focus, button:focus-visible { outline: 3px solid rgba(47,111
 .line-number { color: #78848c; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .76rem; text-align: right; user-select: none; }
 .line-text { white-space: pre-wrap; font-size: clamp(1.05rem, 1.5vw, 1.25rem); line-height: 1.72; }
 .line-count { color: var(--teal); font-family: ui-sans-serif, system-ui, sans-serif; font-size: .73rem; font-weight: 800; text-align: right; }
-.word-heat { margin: 0 -.06em; padding: .06em .08em; border-radius: 3px; box-decoration-break: clone; -webkit-box-decoration-break: clone; transition: background-color 120ms ease, box-shadow 120ms ease; }
+.word-heat { margin: 0 -.06em; padding: .06em .08em; border: 0; border-radius: 3px; color: inherit; font: inherit; cursor: pointer; box-decoration-break: clone; -webkit-box-decoration-break: clone; transition: background-color 120ms ease, box-shadow 120ms ease; }
 .word-heat:hover { box-shadow: 0 0 0 2px rgba(47,111,145,.35); }
+.word-heat:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.word-heat.is-selected { box-shadow: 0 0 0 3px var(--blue); }
 .heat-0 { background: transparent; }
 .heat-1 { background: rgba(250, 218, 101, .34); }
 .heat-2 { background: rgba(246, 185, 59, .48); }
@@ -160,6 +163,10 @@ select:focus, input:focus, button:focus-visible { outline: 3px solid rgba(47,111
 .filters label:last-child { grid-column: 1 / -1; }
 .filters label { display: grid; gap: .25rem; color: var(--muted); font-size: .74rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
 .filters input, .filters select { min-height: 38px; padding: .4rem .55rem; font-size: .88rem; }
+.word-selection { display: flex; gap: .75rem; align-items: center; justify-content: space-between; padding: .75rem 1.35rem; border-bottom: 1px solid var(--line); background: #eef6f7; color: var(--navy); font-size: .86rem; }
+.word-selection[hidden] { display: none; }
+.word-selection strong { font-family: "New Athena Unicode", "Noto Serif", Georgia, serif; font-size: 1.05rem; }
+.word-selection button { padding: .42rem .65rem; border-color: #9ab7c0; background: white; font-size: .78rem; }
 
 .reuse-list { min-height: 220px; overflow-y: auto; }
 .reuse-card { padding: 1rem 1.35rem; border-bottom: 1px solid var(--line); }
