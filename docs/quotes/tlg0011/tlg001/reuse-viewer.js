@@ -335,6 +335,27 @@
     return first.id === last.id ? `Line ${first.id}` : `Lines ${first.id}–${last.id}`;
   }
 
+  function renderReuseQuote(note) {
+    const quote = document.createElement("blockquote");
+    quote.className = "reuse-quote";
+    quote.lang = "grc";
+    quote.setAttribute("aria-label", "Matched Greek quotation");
+
+    const passage = sequence.data.slice(note.start, note.stop + 1);
+    if (!state.word || !overlaps(note.start, note.stop, state.word.start, state.word.stop)) {
+      quote.textContent = passage;
+      return quote;
+    }
+
+    const highlightStart = Math.max(note.start, state.word.start);
+    const highlightStop = Math.min(note.stop, state.word.stop);
+    quote.append(document.createTextNode(sequence.data.slice(note.start, highlightStart)));
+    const selected = document.createElement("mark");
+    selected.textContent = sequence.data.slice(highlightStart, highlightStop + 1);
+    quote.append(selected, document.createTextNode(sequence.data.slice(highlightStop + 1, note.stop + 1)));
+    return quote;
+  }
+
   function renderMatches(matches) {
     const filtered = filteredMatches(matches);
     const visible = filtered.slice(0, state.limit);
@@ -363,13 +384,15 @@
           const title = document.createElement("h3");
           title.textContent = track.name;
 
+          const quote = renderReuseQuote(note);
+
           const link = document.createElement("a");
           link.href = `${track.base}${note.url}`;
           link.target = "_blank";
           link.rel = "noreferrer";
           link.textContent = `Open ${note.sloc || "page"} in HathiTrust`;
 
-          card.append(meta, title, link);
+          card.append(meta, title, quote, link);
           return card;
         })
       );
