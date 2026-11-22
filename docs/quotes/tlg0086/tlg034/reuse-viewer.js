@@ -2,9 +2,10 @@
   "use strict";
 
   const BASE_URN = "urn:cts:greekLit:tlg0086.tlg034";
+  const WORK_ID = "tlg034";
   const PAGE_SIZE = 30;
   const languageNames = {
-    deu: "German", ell: "Greek", eng: "English", fra: "French",
+    deu: "German", grc: "Greek", eng: "English", fra: "French",
     ita: "Italian", lat: "Latin"
   };
 
@@ -19,7 +20,16 @@
     chapter.children.map((section) => ({ ...section, chapter: chapter.id }))
   );
   const sectionChunks = lines;
-  const state = { chunk: 0, language: "all", source: "quotations", query: "", word: null, limit: PAGE_SIZE };
+  const sourceTokens = [...sequence.data.matchAll(/\S+/gu)].map((match) => ({
+    text: match[0],
+    start: match.index,
+    stop: match.index + match[0].length - 1
+  }));
+  const phraseCache = new Map();
+  const state = {
+    chunk: 0, language: "all", source: "quotations", query: "", word: null,
+    phrase: null, phraseScope: "section", limit: PAGE_SIZE
+  };
 
   const elements = {
     bookFilter: document.querySelector("#book-filter"),
@@ -35,6 +45,9 @@
     overview: document.querySelector("#reuse-overview"),
     overviewLanguage: document.querySelector("#overview-language"),
     overviewSelection: document.querySelector("#overview-selection"),
+    phraseList: document.querySelector("#phrase-list"),
+    phraseScope: document.querySelector("#phrase-scope"),
+    phraseStatus: document.querySelector("#phrase-status"),
     previousChunk: document.querySelector("#previous-chunk"),
     reuseList: document.querySelector("#reuse-list"),
     sceneCount: document.querySelector("#scene-count"),
@@ -56,6 +69,23 @@
 
   function overlaps(aStart, aStop, bStart, bStop) {
     return aStart <= bStop && aStop >= bStart;
+  }
+
+  function displayGreek(value) {
+    return value.normalize("NFC");
+  }
+
+  function publicLanguage(language) {
+    return language === "ell" ? "grc" : language;
+  }
+
+  function languageMatches(track) {
+    return state.language === "all" || publicLanguage(track.lang) === state.language;
+  }
+
+  function viewerBasePath() {
+    const match = location.pathname.match(/^(.*\/quotes\/)/);
+    return `${match ? match[1] : "/quotes/"}${BASE_URN}`;
   }
 
   function classifyTrack(track) {
@@ -97,6 +127,143 @@
     if (state.source === "editions") return "full editions";
     if (state.source === "all") return "all books";
     return "quotation sources";
+  }
+
+  function phraseScopeDetails() {
+    const section = sectionChunks[state.chunk];
+    if (state.phraseScope === "work") {
+      return { start: 0, stop: sequence.data.length - 1, label: "the complete work" };
+    }
+    if (state.phraseScope === "chapter") {
+      const chapter = chapters.find((item) => item.id === section.chapter);
+      return { start: chapter.start, stop: chapter.stop, label: `Chapter ${chapter.id}` };
+    }
+    return { start: section.start, stop: section.stop, label: `Section ${section.id}` };
+  }
+
+  function lowerBound(items, value, key) {
+    let low = 0;
+    let high = items.length;
+    while (low < high) {
+      const middle = (low + high) >> 1;
+      if (items[middle][key] < value) low = middle + 1;
+      else high = middle;
+    }
+    return low;
+  }
+
+  function rankedPhrases() {
+    const scope = phraseScopeDetails();
+    const cacheKey = [state.phraseScope, scope.start, scope.stop, state.source, state.language].join(":");
+    if (phraseCache.has(cacheKey)) return phraseCache.get(cacheKey);
+
+    const tokens = sourceTokens.filter((token) => token.start >= scope.start && token.stop <= scope.stop);
+    const notes = [];
+    tracks.forEach((track) => {
+      if (!sourceMatches(track) || !languageMatches(track)) return;
+      track.notes.forEach((note) => {
+        if (overlaps(note.start, note.stop, scope.start, scope.stop)) notes.push({ track, note });
+      });
+    });
+    if (tokens.length < 3 || !notes.length) {
+      const result = { scope, phrases: [], passageCount: notes.length };
+      phraseCache.set(cacheKey, result);
+      return result;
+    }
+
+    const changes = new Int32Array(tokens.length + 1);
+    notes.forEach(({ note }) => {
+      const first = lowerBound(tokens, note.start, "start");
+      const afterLast = lowerBound(tokens, note.stop + 1, "stop");
+      if (first < afterLast) {
+        changes[first] += 1;
+        changes[afterLast] -= 1;
+      }
+    });
+    const coverage = new Uint32Array(tokens.length);
+    let running = 0;
+    for (let index = 0; index < tokens.length; index += 1) {
+      running += changes[index];
+      coverage[index] = running;
+    }
+
+    const candidates = [];
+    [3, 4, 5, 6, 8, 10, 12].forEach((length) => {
+      const strongest = [];
+      for (let start = 0; start + length <= tokens.length; start += 1) {
+        let support = Infinity;
+        for (let offset = 0; offset < length; offset += 1) {
+          support = Math.min(support, coverage[start + offset]);
+        }
+        if (!support) continue;
+        strongest.push({ start, length, support });
+        if (strongest.length > 96) {
+          strongest.sort((a, b) => b.support - a.support || b.length - a.length);
+          strongest.length = 48;
+        }
+      }
+      strongest.sort((a, b) => b.support - a.support || b.length - a.length);
+      candidates.push(...strongest.slice(0, 48));
+    });
+
+    const exact = candidates.map((candidate) => {
+      const first = tokens[candidate.start];
+      const last = tokens[candidate.start + candidate.length - 1];
+      const covering = notes.filter(({ note }) => note.start <= first.start && note.stop >= last.stop);
+      return {
+        start: first.start,
+        stop: last.stop,
+        text: displayGreek(sequence.data.slice(first.start, last.stop + 1)),
+        passages: covering.length,
+        sources: new Set(covering.map(({ track }) => track.id)).size,
+        citation: lineRangeForNote({ start: first.start, stop: last.stop })
+      };
+    }).filter((phrase) => phrase.passages > 0)
+      .sort((a, b) => b.passages - a.passages || (b.stop - b.start) - (a.stop - a.start));
+
+    const phrases = [];
+    exact.forEach((candidate) => {
+      const duplicate = phrases.some((accepted) => {
+        const intersection = Math.max(0, Math.min(candidate.stop, accepted.stop) - Math.max(candidate.start, accepted.start) + 1);
+        const shorter = Math.min(candidate.stop - candidate.start + 1, accepted.stop - accepted.start + 1);
+        return intersection / shorter >= 0.65;
+      });
+      if (!duplicate && phrases.length < 8) phrases.push(candidate);
+    });
+    const result = { scope, phrases, passageCount: notes.length };
+    phraseCache.set(cacheKey, result);
+    return result;
+  }
+
+  function renderPhrases() {
+    const result = rankedPhrases();
+    elements.phraseScope.value = state.phraseScope;
+    elements.phraseStatus.textContent = `Ranked by passages that contain the complete phrase in ${result.scope.label}; ${result.passageCount.toLocaleString()} filtered reuse passages considered.`;
+    if (!result.phrases.length) {
+      const empty = document.createElement("p");
+      empty.className = "phrase-empty";
+      empty.textContent = "No multiword quotation spans were found for this scope and filter.";
+      elements.phraseList.replaceChildren(empty);
+      return;
+    }
+    elements.phraseList.replaceChildren(...result.phrases.map((phrase) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "phrase-item";
+      if (state.phrase && state.phrase.start === phrase.start && state.phrase.stop === phrase.stop) button.classList.add("is-selected");
+      button.dataset.start = String(phrase.start);
+      button.dataset.stop = String(phrase.stop);
+      button.dataset.text = phrase.text;
+      const text = document.createElement("span");
+      text.className = "phrase-text";
+      text.lang = "grc";
+      text.textContent = phrase.text;
+      const meta = document.createElement("span");
+      meta.className = "phrase-meta";
+      meta.textContent = `${phrase.passages.toLocaleString()} passages · ${phrase.sources.toLocaleString()} sources · ${phrase.citation}`;
+      button.append(text, meta);
+      return button;
+    }));
   }
 
   function matchesForChunk(chunk) {
@@ -192,7 +359,7 @@
           if (state.word && state.word.start === wordStart && state.word.stop === wordStop) {
             word.classList.add("is-selected");
           }
-          word.textContent = token.text;
+          word.textContent = displayGreek(token.text);
           word.title = token.count
             ? `${token.count} reuse ${token.count === 1 ? "passage overlaps" : "passages overlap"} this word; select to inspect`
             : "No detected reuse overlaps this word; select to confirm";
@@ -201,7 +368,7 @@
           word.dataset.stop = String(wordStop);
           word.dataset.line = line.id;
           word.setAttribute("aria-pressed", String(Boolean(state.word && state.word.start === wordStart && state.word.stop === wordStop)));
-          word.setAttribute("aria-label", `${token.text}, ${token.count} matching ${token.count === 1 ? "passage" : "passages"}; show passages`);
+          word.setAttribute("aria-label", `${displayGreek(token.text)}, ${token.count} matching ${token.count === 1 ? "passage" : "passages"}; show passages`);
           text.append(word);
           cursor = token.stop;
         });
@@ -222,7 +389,7 @@
 
   function matchesInScope(matches) {
     return matches.filter(({ track }) =>
-      sourceMatches(track) && (state.language === "all" || track.lang === state.language)
+      sourceMatches(track) && languageMatches(track)
     );
   }
 
@@ -242,7 +409,7 @@
     const textLength = sequence.data.length;
     tracks.forEach((track) => {
       if (!sourceMatches(track)) return;
-      if (state.language !== "all" && track.lang !== state.language) return;
+      if (!languageMatches(track)) return;
       track.notes.forEach((note) => {
         const start = Math.max(0, Math.min(bins - 1, Math.floor(note.start / textLength * bins)));
         const end = Math.max(start, Math.min(bins - 1, Math.floor(note.stop / textLength * bins)));
@@ -287,7 +454,7 @@
     context.moveTo(0, chartBottom);
     values.forEach((value, index) => {
       const x = index / (bins - 1) * width;
-      const normalized = Math.log1p(value) / Math.log1p(maximum);
+      const normalized = value / maximum;
       context.lineTo(x, chartBottom - normalized * chartHeight);
     });
     context.lineTo(width, chartBottom);
@@ -316,11 +483,12 @@
   function filteredMatches(matches) {
     const query = state.query.trim().toLocaleLowerCase();
     return matches.filter(({ track, note }) => {
-      const languageMatches = state.language === "all" || track.lang === state.language;
+      const trackLanguageMatches = languageMatches(track);
       const sourceTypeMatches = sourceMatches(track);
       const wordMatches = !state.word || overlaps(note.start, note.stop, state.word.start, state.word.stop);
+      const phraseMatches = !state.phrase || (note.start <= state.phrase.start && note.stop >= state.phrase.stop);
       const queryMatches = !query || `${track.name} ${track.date}`.toLocaleLowerCase().includes(query);
-      return sourceTypeMatches && languageMatches && wordMatches && queryMatches;
+      return sourceTypeMatches && trackLanguageMatches && wordMatches && phraseMatches && queryMatches;
     });
   }
 
@@ -339,35 +507,36 @@
 
     let displayStart = note.start;
     let displayStop = note.stop;
-    const selectedOverlap = state.word && overlaps(note.start, note.stop, state.word.start, state.word.stop);
+    const selection = state.phrase || state.word;
+    const selectedOverlap = selection && overlaps(note.start, note.stop, selection.start, selection.stop);
 
     // A few anthology and edition records contain page-sized spans. Keep the
     // exact detected span for ordinary quotations, but center long results on
     // the clicked word so every card remains a readable multiword passage.
     if (selectedOverlap && note.stop - note.start > 520) {
-      displayStart = Math.max(note.start, state.word.start - 220);
-      displayStop = Math.min(note.stop, state.word.stop + 220);
+      displayStart = Math.max(note.start, selection.start - 220);
+      displayStop = Math.min(note.stop, selection.stop + 220);
       while (displayStart > note.start && !/\s/u.test(sequence.data[displayStart - 1])) displayStart -= 1;
       while (displayStop < note.stop && !/\s/u.test(sequence.data[displayStop + 1])) displayStop += 1;
     }
     if (selectedOverlap) {
-      displayStart = Math.min(displayStart, state.word.start);
-      displayStop = Math.max(displayStop, state.word.stop);
+      displayStart = Math.min(displayStart, selection.start);
+      displayStop = Math.max(displayStop, selection.stop);
     }
 
     const leadingEllipsis = displayStart > note.start ? "… " : "";
     const trailingEllipsis = displayStop < note.stop ? " …" : "";
     if (!selectedOverlap) {
-      quote.textContent = `${leadingEllipsis}${sequence.data.slice(displayStart, displayStop + 1)}${trailingEllipsis}`;
+      quote.textContent = displayGreek(`${leadingEllipsis}${sequence.data.slice(displayStart, displayStop + 1)}${trailingEllipsis}`);
       return quote;
     }
 
-    const highlightStart = Math.max(displayStart, state.word.start);
-    const highlightStop = Math.min(displayStop, state.word.stop);
-    quote.append(document.createTextNode(leadingEllipsis + sequence.data.slice(displayStart, highlightStart)));
+    const highlightStart = Math.max(displayStart, selection.start);
+    const highlightStop = Math.min(displayStop, selection.stop);
+    quote.append(document.createTextNode(displayGreek(leadingEllipsis + sequence.data.slice(displayStart, highlightStart))));
     const selected = document.createElement("mark");
-    selected.textContent = sequence.data.slice(highlightStart, highlightStop + 1);
-    quote.append(selected, document.createTextNode(sequence.data.slice(highlightStop + 1, displayStop + 1) + trailingEllipsis));
+    selected.textContent = displayGreek(sequence.data.slice(highlightStart, highlightStop + 1));
+    quote.append(selected, document.createTextNode(displayGreek(sequence.data.slice(highlightStop + 1, displayStop + 1) + trailingEllipsis)));
     return quote;
   }
 
@@ -375,8 +544,10 @@
     const filtered = filteredMatches(matches);
     const visible = filtered.slice(0, state.limit);
     elements.visibleReuseCount.textContent = filtered.length.toLocaleString();
-    elements.wordSelection.hidden = !state.word;
-    if (state.word) {
+    elements.wordSelection.hidden = !state.word && !state.phrase;
+    if (state.phrase) {
+      elements.selectedWord.textContent = `Complete phrase: “${state.phrase.text}”`;
+    } else if (state.word) {
       elements.selectedWord.textContent = `“${state.word.text}” (section ${state.word.line})`;
     }
 
@@ -394,7 +565,8 @@
           const meta = document.createElement("p");
           meta.className = "reuse-meta";
           const sourceType = track.isEdition ? "Full edition" : "Quotation";
-          meta.textContent = `${lineRangeForNote(note)} · ${sourceType} · ${languageNames[track.lang] || track.lang} · ${track.date || "Undated"}`;
+          const language = publicLanguage(track.lang);
+          meta.textContent = `${lineRangeForNote(note)} · ${sourceType} · ${languageNames[language] || language} · ${track.date || "Undated"}`;
 
           const title = document.createElement("h3");
           title.textContent = track.name;
@@ -417,13 +589,15 @@
     elements.showMore.textContent = `Show ${Math.min(PAGE_SIZE, filtered.length - state.limit)} more matches`;
   }
 
-  function updateHash() {
+  function updateRoute() {
     const params = new URLSearchParams();
-    params.set("section", sectionChunks[state.chunk].id);
     if (state.language !== "all") params.set("lang", state.language);
     if (state.source !== "quotations") params.set("source", state.source);
     if (state.word) params.set("word", `${state.word.start}-${state.word.stop}`);
-    history.replaceState(null, "", `#${params.toString()}`);
+    if (state.phrase) params.set("phrase", `${state.phrase.start}-${state.phrase.stop}`);
+    if (state.phraseScope !== "section") params.set("phraseScope", state.phraseScope);
+    const suffix = params.toString();
+    history.replaceState(null, "", `${viewerBasePath()}:${sectionChunks[state.chunk].id}${suffix ? `&${suffix}` : ""}`);
   }
 
   function render() {
@@ -435,15 +609,16 @@
     elements.chunkTitle.textContent = `Section ${chunk.id}`;
     elements.chunkSummary.textContent = `${heatMatches.length.toLocaleString()} detected reuse passages in ${new Set(heatMatches.map(({ track }) => track.id)).size.toLocaleString()} ${scopeLabel()} overlap this section${state.language === "all" ? "" : ` in ${languageNames[state.language] || state.language}`}.`;
     elements.totalReuseCount.textContent = tracks
-      .filter((track) => sourceMatches(track) && (state.language === "all" || track.lang === state.language))
+      .filter((track) => sourceMatches(track) && languageMatches(track))
       .reduce((total, track) => total + track.notes.length, 0)
       .toLocaleString();
     elements.previousChunk.disabled = state.chunk === 0;
     elements.nextChunk.disabled = state.chunk === sectionChunks.length - 1;
     renderOverview();
+    renderPhrases();
     renderText(chunk, heatMatches);
     renderMatches(matches);
-    updateHash();
+    updateRoute();
   }
 
   function populateControls() {
@@ -464,7 +639,7 @@
       })
     );
 
-    const languages = [...new Set(tracks.map((track) => track.lang).filter(Boolean))].sort();
+    const languages = [...new Set(tracks.map((track) => publicLanguage(track.lang)).filter(Boolean))].sort();
     const all = document.createElement("option");
     all.value = "all";
     all.textContent = "All languages";
@@ -480,15 +655,35 @@
 
   }
 
-  function readHash() {
-    const params = new URLSearchParams(location.hash.slice(1));
-    const requestedSection = params.get("section");
-    const requestedLanguage = params.get("lang");
+  function readRoute() {
+    const pathRoute = location.pathname.match(/\/urn:cts:greekLit:tlg0086\.tlg034:([^&/]+)(?:&(.*))?$/)
+      || location.pathname.match(/\/tlg034\.([^&/]+)(?:&(.*))?$/);
+    let requestedSection = pathRoute ? decodeURIComponent(pathRoute[1]) : null;
+    let params = pathRoute
+      ? new URLSearchParams(pathRoute[2] || "")
+      : new URLSearchParams(location.hash.slice(1));
+    if (!requestedSection) requestedSection = params.get("section");
+
+    if (!requestedSection) {
+      const savedRoute = sessionStorage.getItem("idi-greek-route");
+      if (savedRoute) {
+        const saved = JSON.parse(savedRoute);
+        if (saved.work === WORK_ID) {
+          requestedSection = saved.passage;
+          params = new URLSearchParams(saved.query || "");
+          sessionStorage.removeItem("idi-greek-route");
+        }
+      }
+    }
+
+    const requestedLanguage = publicLanguage(params.get("lang"));
     const requestedSource = params.get("source");
     const requestedWord = params.get("word");
+    const requestedPhrase = params.get("phrase");
+    const requestedPhraseScope = params.get("phraseScope");
     const sectionIndex = sectionChunks.findIndex((section) => section.id === requestedSection);
     if (sectionIndex >= 0) state.chunk = sectionIndex;
-    if (requestedLanguage && (requestedLanguage === "all" || tracks.some((track) => track.lang === requestedLanguage))) {
+    if (requestedLanguage && (requestedLanguage === "all" || tracks.some((track) => publicLanguage(track.lang) === requestedLanguage))) {
       state.language = requestedLanguage;
       elements.languageFilter.value = requestedLanguage;
     }
@@ -496,13 +691,23 @@
       state.source = requestedSource;
       elements.sourceFilter.value = requestedSource;
     }
+    if (["work", "chapter", "section"].includes(requestedPhraseScope)) state.phraseScope = requestedPhraseScope;
     const wordBounds = requestedWord && requestedWord.match(/^(\d+)-(\d+)$/);
     if (wordBounds) {
       const start = Number(wordBounds[1]);
       const stop = Number(wordBounds[2]);
       const line = lines.find((item) => overlaps(item.start, item.stop, start, stop));
       if (line && start <= stop && stop < sequence.data.length) {
-        state.word = { start, stop, text: sequence.data.slice(start, stop + 1), line: line.id };
+        state.word = { start, stop, text: displayGreek(sequence.data.slice(start, stop + 1)), line: line.id };
+      }
+    }
+    const phraseBounds = requestedPhrase && requestedPhrase.match(/^(\d+)-(\d+)$/);
+    if (phraseBounds) {
+      const start = Number(phraseBounds[1]);
+      const stop = Number(phraseBounds[2]);
+      if (start <= stop && stop < sequence.data.length) {
+        state.phrase = { start, stop, text: displayGreek(sequence.data.slice(start, stop + 1)) };
+        state.word = null;
       }
     }
   }
@@ -510,6 +715,7 @@
   elements.previousChunk.addEventListener("click", () => {
     state.chunk = Math.max(0, state.chunk - 1);
     state.word = null;
+    state.phrase = null;
     state.limit = PAGE_SIZE;
     render();
     scrollTo({ top: document.querySelector(".chunk-nav").offsetTop - 12, behavior: "smooth" });
@@ -518,6 +724,7 @@
   elements.nextChunk.addEventListener("click", () => {
     state.chunk = Math.min(sectionChunks.length - 1, state.chunk + 1);
     state.word = null;
+    state.phrase = null;
     state.limit = PAGE_SIZE;
     render();
     scrollTo({ top: document.querySelector(".chunk-nav").offsetTop - 12, behavior: "smooth" });
@@ -526,18 +733,21 @@
   elements.chunkSelect.addEventListener("change", (event) => {
     state.chunk = Number(event.target.value);
     state.word = null;
+    state.phrase = null;
     state.limit = PAGE_SIZE;
     render();
   });
 
   elements.languageFilter.addEventListener("change", (event) => {
     state.language = event.target.value;
+    state.phrase = null;
     state.limit = PAGE_SIZE;
     render();
   });
 
   elements.sourceFilter.addEventListener("change", (event) => {
     state.source = event.target.value;
+    state.phrase = null;
     state.limit = PAGE_SIZE;
     render();
   });
@@ -562,12 +772,14 @@
     state.word = alreadySelected
       ? null
       : { start, stop, text: target.textContent, line: target.dataset.line };
+    state.phrase = null;
     state.limit = PAGE_SIZE;
     render();
   });
 
   elements.clearWord.addEventListener("click", () => {
     state.word = null;
+    state.phrase = null;
     state.limit = PAGE_SIZE;
     render();
   });
@@ -582,9 +794,32 @@
     if (nextChunk >= 0) {
       state.chunk = nextChunk;
       state.word = null;
+      state.phrase = null;
       state.limit = PAGE_SIZE;
       render();
     }
+  });
+
+  elements.phraseScope.addEventListener("change", (event) => {
+    state.phraseScope = event.target.value;
+    state.phrase = null;
+    state.word = null;
+    state.limit = PAGE_SIZE;
+    render();
+  });
+
+  elements.phraseList.addEventListener("click", (event) => {
+    const target = event.target.closest(".phrase-item");
+    if (!target) return;
+    const start = Number(target.dataset.start);
+    const stop = Number(target.dataset.stop);
+    const nextChunk = sectionChunks.findIndex((section) => start >= section.start && start <= section.stop);
+    if (nextChunk >= 0) state.chunk = nextChunk;
+    state.word = null;
+    state.phrase = { start, stop, text: target.dataset.text };
+    state.limit = PAGE_SIZE;
+    render();
+    document.querySelector(".workspace").scrollIntoView({ behavior: "smooth", block: "start" });
   });
 
   elements.copyCitation.addEventListener("click", async () => {
@@ -598,14 +833,14 @@
     }
   });
 
-  window.addEventListener("hashchange", () => {
-    readHash();
+  window.addEventListener("popstate", () => {
+    readRoute();
     render();
   });
 
   new ResizeObserver(() => renderOverview()).observe(elements.overview);
 
   populateControls();
-  readHash();
+  readRoute();
   render();
 })();

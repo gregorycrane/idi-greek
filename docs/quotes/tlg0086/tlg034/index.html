@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Explore reuse of Aristotle's Poetics by section in the Institutional Books corpus.">
   <title>Aristotle, Poetics — Text Reuse Viewer</title>
-  <link rel="stylesheet" href="reuse-viewer.css">
+  <link rel="stylesheet" href="reuse-viewer.css?v=phrase-rankings">
 
   <script src="sequence.js"></script>
   <script src="structure.js"></script>
@@ -30,7 +30,7 @@
   <script src="tracks18.js"></script>
   <script src="tracks19.js"></script>
   <script src="groups.js"></script>
-  <script src="reuse-viewer.js" defer></script>
+  <script src="reuse-viewer.js?v=phrase-rankings" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -82,6 +82,25 @@
         <strong id="overview-selection">Current section: 1.1</strong>
         <span>Section 26.16</span>
       </div>
+    </section>
+
+    <section class="phrase-panel" aria-labelledby="phrase-title">
+      <div class="phrase-heading">
+        <div>
+          <p class="eyebrow">Ranked reuse spans</p>
+          <h2 id="phrase-title">Most quoted phrases</h2>
+        </div>
+        <label class="phrase-scope">
+          <span>Scope</span>
+          <select id="phrase-scope">
+            <option value="work">Work</option>
+            <option value="chapter">Chapter</option>
+            <option value="section" selected>Section</option>
+          </select>
+        </label>
+      </div>
+      <p class="phrase-status" id="phrase-status"></p>
+      <div class="phrase-list" id="phrase-list" aria-live="polite"></div>
     </section>
 
     <section class="workspace">

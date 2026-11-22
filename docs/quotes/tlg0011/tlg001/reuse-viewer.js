@@ -2,9 +2,10 @@
   "use strict";
 
   const BASE_URN = "urn:cts:greekLit:tlg0011.tlg001.perseus-grc2";
+  const WORK_ID = "tlg001";
   const PAGE_SIZE = 30;
   const languageNames = {
-    deu: "German", ell: "Greek", eng: "English", fra: "French",
+    deu: "German", grc: "Greek", eng: "English", fra: "French",
     ita: "Italian", lat: "Latin"
   };
 
@@ -15,7 +16,7 @@
     ...tracks15, ...tracks16, ...tracks17, ...tracks18, ...tracks19
   ];
   const lines = structure[0].notes;
-  const state = { chunk: 0, language: "all", source: "quotations", query: "", word: null, limit: PAGE_SIZE };
+  const state = { chunk: 0, citation: null, language: "all", source: "quotations", query: "", word: null, limit: PAGE_SIZE };
 
   const elements = {
     bookFilter: document.querySelector("#book-filter"),
@@ -59,6 +60,30 @@
 
   function overlaps(aStart, aStop, bStart, bStop) {
     return aStart <= bStop && aStop >= bStart;
+  }
+
+  function displayGreek(value) {
+    return value.normalize("NFC");
+  }
+
+  function publicLanguage(language) {
+    return language === "ell" ? "grc" : language;
+  }
+
+  function languageMatches(track) {
+    return state.language === "all" || publicLanguage(track.lang) === state.language;
+  }
+
+  function viewerBasePath() {
+    const match = location.pathname.match(/^(.*\/quotes\/)/);
+    return `${match ? match[1] : "/quotes/"}${BASE_URN}`;
+  }
+
+  function chunkIndexForLine(lineId) {
+    const line = lines.find((item) => item.id === String(lineId));
+    if (!line) return -1;
+    const number = Number.parseInt(line.id, 10);
+    return sceneChunks.findIndex((chunk) => number >= chunk.start && number <= chunk.end);
   }
 
   function classifyTrack(track) {
@@ -144,8 +169,8 @@
     );
   }
 
-  function passageUrn(chunk) {
-    return `${BASE_URN}:${chunk.start}-${chunk.end}`;
+  function passageUrn() {
+    return `${BASE_URN}:${state.citation || sceneChunks[state.chunk].start}`;
   }
 
   function renderText(chunk, matches) {
@@ -195,7 +220,7 @@
           if (state.word && state.word.start === wordStart && state.word.stop === wordStop) {
             word.classList.add("is-selected");
           }
-          word.textContent = token.text;
+          word.textContent = displayGreek(token.text);
           word.title = token.count
             ? `${token.count} reuse ${token.count === 1 ? "passage overlaps" : "passages overlap"} this word; select to inspect`
             : "No detected reuse overlaps this word; select to confirm";
@@ -204,7 +229,7 @@
           word.dataset.stop = String(wordStop);
           word.dataset.line = line.id;
           word.setAttribute("aria-pressed", String(Boolean(state.word && state.word.start === wordStart && state.word.stop === wordStop)));
-          word.setAttribute("aria-label", `${token.text}, ${token.count} matching ${token.count === 1 ? "passage" : "passages"}; show passages`);
+          word.setAttribute("aria-label", `${displayGreek(token.text)}, ${token.count} matching ${token.count === 1 ? "passage" : "passages"}; show passages`);
           text.append(word);
           cursor = token.stop;
         });
@@ -225,7 +250,7 @@
 
   function matchesInScope(matches) {
     return matches.filter(({ track }) =>
-      sourceMatches(track) && (state.language === "all" || track.lang === state.language)
+      sourceMatches(track) && languageMatches(track)
     );
   }
 
@@ -245,7 +270,7 @@
     const textLength = sequence.data.length;
     tracks.forEach((track) => {
       if (!sourceMatches(track)) return;
-      if (state.language !== "all" && track.lang !== state.language) return;
+      if (!languageMatches(track)) return;
       track.notes.forEach((note) => {
         const start = Math.max(0, Math.min(bins - 1, Math.floor(note.start / textLength * bins)));
         const end = Math.max(start, Math.min(bins - 1, Math.floor(note.stop / textLength * bins)));
@@ -291,7 +316,7 @@
     context.moveTo(0, chartBottom);
     values.forEach((value, index) => {
       const x = index / (bins - 1) * width;
-      const normalized = Math.log1p(value) / Math.log1p(maximum);
+      const normalized = value / maximum;
       context.lineTo(x, chartBottom - normalized * chartHeight);
     });
     context.lineTo(width, chartBottom);
@@ -320,11 +345,11 @@
   function filteredMatches(matches) {
     const query = state.query.trim().toLocaleLowerCase();
     return matches.filter(({ track, note }) => {
-      const languageMatches = state.language === "all" || track.lang === state.language;
+      const trackLanguageMatches = languageMatches(track);
       const sourceTypeMatches = sourceMatches(track);
       const wordMatches = !state.word || overlaps(note.start, note.stop, state.word.start, state.word.stop);
       const queryMatches = !query || `${track.name} ${track.date}`.toLocaleLowerCase().includes(query);
-      return sourceTypeMatches && languageMatches && wordMatches && queryMatches;
+      return sourceTypeMatches && trackLanguageMatches && wordMatches && queryMatches;
     });
   }
 
@@ -379,7 +404,8 @@
           const meta = document.createElement("p");
           meta.className = "reuse-meta";
           const sourceType = track.isEdition ? "Full edition" : "Quotation";
-          meta.textContent = `${lineRangeForNote(note)} · ${sourceType} · ${languageNames[track.lang] || track.lang} · ${track.date || "Undated"}`;
+          const language = publicLanguage(track.lang);
+          meta.textContent = `${lineRangeForNote(note)} · ${sourceType} · ${languageNames[language] || language} · ${track.date || "Undated"}`;
 
           const title = document.createElement("h3");
           title.textContent = track.name;
@@ -402,13 +428,14 @@
     elements.showMore.textContent = `Show ${Math.min(PAGE_SIZE, filtered.length - state.limit)} more matches`;
   }
 
-  function updateHash() {
+  function updateRoute() {
     const params = new URLSearchParams();
-    params.set("scene", String(state.chunk + 1));
     if (state.language !== "all") params.set("lang", state.language);
     if (state.source !== "quotations") params.set("source", state.source);
     if (state.word) params.set("word", `${state.word.start}-${state.word.stop}`);
-    history.replaceState(null, "", `#${params.toString()}`);
+    const suffix = params.toString();
+    const passage = state.citation || String(sceneChunks[state.chunk].start);
+    history.replaceState(null, "", `${viewerBasePath()}:${passage}${suffix ? `&${suffix}` : ""}`);
   }
 
   function render() {
@@ -420,7 +447,7 @@
     elements.chunkTitle.textContent = `Lines ${chunk.start}–${chunk.end}`;
     elements.chunkSummary.textContent = `${heatMatches.length.toLocaleString()} detected reuse passages in ${new Set(heatMatches.map(({ track }) => track.id)).size.toLocaleString()} ${scopeLabel()} overlap this scene${state.language === "all" ? "" : ` in ${languageNames[state.language] || state.language}`}.`;
     elements.totalReuseCount.textContent = tracks
-      .filter((track) => sourceMatches(track) && (state.language === "all" || track.lang === state.language))
+      .filter((track) => sourceMatches(track) && languageMatches(track))
       .reduce((total, track) => total + track.notes.length, 0)
       .toLocaleString();
     elements.previousChunk.disabled = state.chunk === 0;
@@ -428,7 +455,7 @@
     renderOverview();
     renderText(chunk, heatMatches);
     renderMatches(matches);
-    updateHash();
+    updateRoute();
   }
 
   function populateControls() {
@@ -442,7 +469,7 @@
       })
     );
 
-    const languages = [...new Set(tracks.map((track) => track.lang))].sort();
+    const languages = [...new Set(tracks.map((track) => publicLanguage(track.lang)).filter(Boolean))].sort();
     const all = document.createElement("option");
     all.value = "all";
     all.textContent = "All languages";
@@ -458,14 +485,40 @@
 
   }
 
-  function readHash() {
-    const params = new URLSearchParams(location.hash.slice(1));
+  function readRoute() {
+    const pathRoute = location.pathname.match(/\/urn:cts:greekLit:tlg0011\.tlg001(?:\.perseus-grc2)?:([^&/]+)(?:&(.*))?$/)
+      || location.pathname.match(/\/tlg001\.([^&/]+)(?:&(.*))?$/);
+    let requestedLine = pathRoute ? decodeURIComponent(pathRoute[1]) : null;
+    let params = pathRoute
+      ? new URLSearchParams(pathRoute[2] || "")
+      : new URLSearchParams(location.hash.slice(1));
+    if (!requestedLine) requestedLine = params.get("line");
+
+    if (!requestedLine) {
+      const savedRoute = sessionStorage.getItem("idi-greek-route");
+      if (savedRoute) {
+        const saved = JSON.parse(savedRoute);
+        if (saved.work === WORK_ID) {
+          requestedLine = saved.passage;
+          params = new URLSearchParams(saved.query || "");
+          sessionStorage.removeItem("idi-greek-route");
+        }
+      }
+    }
+
     const requestedScene = Number.parseInt(params.get("scene"), 10);
-    const requestedLanguage = params.get("lang");
+    const requestedLanguage = publicLanguage(params.get("lang"));
     const requestedSource = params.get("source");
     const requestedWord = params.get("word");
-    if (requestedScene >= 1 && requestedScene <= sceneChunks.length) state.chunk = requestedScene - 1;
-    if (requestedLanguage && (requestedLanguage === "all" || tracks.some((track) => track.lang === requestedLanguage))) {
+    const requestedChunk = requestedLine ? chunkIndexForLine(requestedLine) : -1;
+    if (requestedChunk >= 0) {
+      state.chunk = requestedChunk;
+      state.citation = String(requestedLine);
+    } else if (requestedScene >= 1 && requestedScene <= sceneChunks.length) {
+      state.chunk = requestedScene - 1;
+      state.citation = String(sceneChunks[state.chunk].start);
+    }
+    if (requestedLanguage && (requestedLanguage === "all" || tracks.some((track) => publicLanguage(track.lang) === requestedLanguage))) {
       state.language = requestedLanguage;
       elements.languageFilter.value = requestedLanguage;
     }
@@ -479,13 +532,14 @@
       const stop = Number(wordBounds[2]);
       const line = lines.find((item) => overlaps(item.start, item.stop, start, stop));
       if (line && start <= stop && stop < sequence.data.length) {
-        state.word = { start, stop, text: sequence.data.slice(start, stop + 1), line: line.id };
+        state.word = { start, stop, text: displayGreek(sequence.data.slice(start, stop + 1)), line: line.id };
       }
     }
   }
 
   elements.previousChunk.addEventListener("click", () => {
     state.chunk = Math.max(0, state.chunk - 1);
+    state.citation = String(sceneChunks[state.chunk].start);
     state.word = null;
     state.limit = PAGE_SIZE;
     render();
@@ -494,6 +548,7 @@
 
   elements.nextChunk.addEventListener("click", () => {
     state.chunk = Math.min(sceneChunks.length - 1, state.chunk + 1);
+    state.citation = String(sceneChunks[state.chunk].start);
     state.word = null;
     state.limit = PAGE_SIZE;
     render();
@@ -502,6 +557,7 @@
 
   elements.chunkSelect.addEventListener("change", (event) => {
     state.chunk = Number(event.target.value);
+    state.citation = String(sceneChunks[state.chunk].start);
     state.word = null;
     state.limit = PAGE_SIZE;
     render();
@@ -539,6 +595,7 @@
     state.word = alreadySelected
       ? null
       : { start, stop, text: target.textContent, line: target.dataset.line };
+    if (state.word) state.citation = target.dataset.line;
     state.limit = PAGE_SIZE;
     render();
   });
@@ -558,6 +615,7 @@
     });
     if (nextChunk >= 0) {
       state.chunk = nextChunk;
+      state.citation = String(sceneChunks[state.chunk].start);
       state.word = null;
       state.limit = PAGE_SIZE;
       render();
@@ -565,7 +623,7 @@
   });
 
   elements.copyCitation.addEventListener("click", async () => {
-    const citation = passageUrn(sceneChunks[state.chunk]);
+    const citation = passageUrn();
     try {
       await navigator.clipboard.writeText(citation);
       elements.copyCitation.textContent = "Citation copied";
@@ -575,14 +633,15 @@
     }
   });
 
-  window.addEventListener("hashchange", () => {
-    readHash();
+  window.addEventListener("popstate", () => {
+    readRoute();
     render();
   });
 
   new ResizeObserver(() => renderOverview()).observe(elements.overview);
 
   populateControls();
-  readHash();
+  readRoute();
+  if (!state.citation) state.citation = String(sceneChunks[state.chunk].start);
   render();
 })();
