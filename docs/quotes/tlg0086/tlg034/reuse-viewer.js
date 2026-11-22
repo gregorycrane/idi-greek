@@ -72,8 +72,8 @@
   }
 
   function viewerBasePath() {
-    const match = location.pathname.match(/^(.*\/quotes\/tlg0086\/)tlg034(?:[./]|$)/);
-    return `${match ? match[1] : "/quotes/tlg0086/"}${WORK_ID}`;
+    const match = location.pathname.match(/^(.*\/quotes\/)/);
+    return `${match ? match[1] : "/quotes/"}${BASE_URN}`;
   }
 
   function classifyTrack(track) {
@@ -442,7 +442,7 @@
     if (state.source !== "quotations") params.set("source", state.source);
     if (state.word) params.set("word", `${state.word.start}-${state.word.stop}`);
     const suffix = params.toString();
-    history.replaceState(null, "", `${viewerBasePath()}.${sectionChunks[state.chunk].id}${suffix ? `&${suffix}` : ""}`);
+    history.replaceState(null, "", `${viewerBasePath()}:${sectionChunks[state.chunk].id}${suffix ? `&${suffix}` : ""}`);
   }
 
   function render() {
@@ -500,7 +500,8 @@
   }
 
   function readRoute() {
-    const pathRoute = location.pathname.match(/\/tlg034\.([^&/]+)(?:&(.*))?$/);
+    const pathRoute = location.pathname.match(/\/urn:cts:greekLit:tlg0086\.tlg034:([^&/]+)(?:&(.*))?$/)
+      || location.pathname.match(/\/tlg034\.([^&/]+)(?:&(.*))?$/);
     let requestedSection = pathRoute ? decodeURIComponent(pathRoute[1]) : null;
     let params = pathRoute
       ? new URLSearchParams(pathRoute[2] || "")

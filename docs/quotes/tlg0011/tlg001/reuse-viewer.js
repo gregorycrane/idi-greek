@@ -75,8 +75,8 @@
   }
 
   function viewerBasePath() {
-    const match = location.pathname.match(/^(.*\/quotes\/tlg0011\/)tlg001(?:[./]|$)/);
-    return `${match ? match[1] : "/quotes/tlg0011/"}${WORK_ID}`;
+    const match = location.pathname.match(/^(.*\/quotes\/)/);
+    return `${match ? match[1] : "/quotes/"}${BASE_URN}`;
   }
 
   function chunkIndexForLine(lineId) {
@@ -435,7 +435,7 @@
     if (state.word) params.set("word", `${state.word.start}-${state.word.stop}`);
     const suffix = params.toString();
     const passage = state.citation || String(sceneChunks[state.chunk].start);
-    history.replaceState(null, "", `${viewerBasePath()}.${passage}${suffix ? `&${suffix}` : ""}`);
+    history.replaceState(null, "", `${viewerBasePath()}:${passage}${suffix ? `&${suffix}` : ""}`);
   }
 
   function render() {
@@ -486,7 +486,8 @@
   }
 
   function readRoute() {
-    const pathRoute = location.pathname.match(/\/tlg001\.([^&/]+)(?:&(.*))?$/);
+    const pathRoute = location.pathname.match(/\/urn:cts:greekLit:tlg0011\.tlg001(?:\.perseus-grc2)?:([^&/]+)(?:&(.*))?$/)
+      || location.pathname.match(/\/tlg001\.([^&/]+)(?:&(.*))?$/);
     let requestedLine = pathRoute ? decodeURIComponent(pathRoute[1]) : null;
     let params = pathRoute
       ? new URLSearchParams(pathRoute[2] || "")

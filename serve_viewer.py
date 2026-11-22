@@ -12,18 +12,31 @@ from urllib.parse import quote, urlsplit
 class ViewerHandler(SimpleHTTPRequestHandler):
     def _redirect_passage(self):
         pathname = urlsplit(self.path).path
-        route = re.match(r"^(.*?/quotes/(tlg\d{4})/)(tlg\d+)\.([^&/]+)(?:&(.*))?$", pathname)
-        if route:
-            prefix, author, work, passage, query = route.groups()
+        cts_route = re.match(
+            r"^(.*?/quotes/)urn:cts:greekLit:(tlg\d{4})\.(tlg\d+)(?:\.[^:&/]+)?:([^&/]+)(?:&(.*))?$",
+            pathname,
+        )
+        short_route = re.match(
+            r"^(.*?/quotes/(tlg\d{4})/)(tlg\d+)\.([^&/]+)(?:&(.*))?$",
+            pathname,
+        )
+        if cts_route:
+            prefix, author, work, passage, query = cts_route.groups()
+            directory = f"{prefix}{author}/{work}/"
+        elif short_route:
+            directory, author, work, passage, query = short_route.groups()
+        else:
+            return False
+
+        if cts_route or short_route:
             passage_key = "section" if author == "tlg0086" and work == "tlg034" else "line"
             fragment = f"{passage_key}={quote(passage)}"
             if query:
                 fragment += f"&{query}"
             self.send_response(302)
-            self.send_header("Location", f"{prefix}{work}/#{fragment}")
+            self.send_header("Location", f"{directory}?v=cts-urn#{fragment}")
             self.end_headers()
             return True
-        return False
 
     def do_GET(self):
         if not self._redirect_passage():
