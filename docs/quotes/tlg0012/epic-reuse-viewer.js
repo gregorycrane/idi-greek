@@ -1,6 +1,9 @@
 (function () {
   "use strict";
 
+  // Chunking policy: works cited only by line or book/line display canonical
+  // Perseus cards while their public CTS routes retain the native citation.
+
   const config = window.epicViewerConfig;
   const BASE_URN = config.baseUrn;
   const AUTHOR_ID = "tlg0012";
@@ -17,13 +20,28 @@
     ...tracks10, ...tracks11, ...tracks12, ...tracks13, ...tracks14,
     ...tracks15, ...tracks16, ...tracks17, ...tracks18, ...tracks19
   ];
-  const bookChunks = structure[0].notes.map((book) => ({
+  const books = structure[0].notes.map((book) => ({
     id: book.id,
     start: book.start,
     stop: book.stop,
     lines: book.children || []
   }));
-  const lines = bookChunks.flatMap((book) => book.lines);
+  const lines = books.flatMap((book) => book.lines);
+  const cardChunks = window.cardChunks.map(([bookNumber, firstLine, lastLine]) => {
+    const book = books.find((item) => item.id === String(bookNumber));
+    const selectedLines = book.lines.filter((line) => {
+      const number = Number(line.name);
+      return number >= firstLine && number <= lastLine;
+    });
+    return {
+      id: `${bookNumber}.${firstLine}`,
+      book: String(bookNumber),
+      card: String(firstLine),
+      start: selectedLines[0].start,
+      stop: selectedLines[selectedLines.length - 1].stop,
+      lines: selectedLines
+    };
+  });
   const state = { chunk: 0, citation: null, language: "all", source: "quotations", query: "", word: null, limit: PAGE_SIZE };
 
   const elements = {
@@ -81,8 +99,13 @@
   }
 
   function chunkIndexForPassage(passage) {
-    const bookId = String(passage).split(".")[0];
-    return bookChunks.findIndex((chunk) => chunk.id === bookId);
+    const [bookId, requestedLine = "1"] = String(passage).split(".");
+    const lineNumber = Number(requestedLine);
+    return cardChunks.findIndex((chunk) => {
+      const firstLine = Number(chunk.lines[0].name);
+      const lastLine = Number(chunk.lines[chunk.lines.length - 1].name);
+      return chunk.book === bookId && lineNumber >= firstLine && lineNumber <= lastLine;
+    });
   }
 
   function classifyTrack(track) {
@@ -169,7 +192,7 @@
   }
 
   function passageUrn() {
-    return `${BASE_URN}:${state.citation || bookChunks[state.chunk].id}`;
+    return `${BASE_URN}:${state.citation || cardChunks[state.chunk].id}`;
   }
 
   function renderText(chunk, matches) {
@@ -288,7 +311,7 @@
     }
 
     const bandHeight = 21;
-    bookChunks.forEach((chunk, index) => {
+    books.forEach((chunk, index) => {
       const bounds = chunkBounds(chunk);
       const left = bounds.start / textLength * width;
       const right = (bounds.stop + 1) / textLength * width;
@@ -302,7 +325,7 @@
       }
     });
 
-    const selectedBounds = chunkBounds(bookChunks[state.chunk]);
+    const selectedBounds = chunkBounds(cardChunks[state.chunk]);
     const selectionLeft = selectedBounds.start / textLength * width;
     const selectionRight = (selectedBounds.stop + 1) / textLength * width;
     context.fillStyle = "rgba(47, 111, 145, 0.2)";
@@ -337,8 +360,8 @@
       ? "All languages"
       : (languageNames[state.language] || state.language);
     elements.overviewLanguage.textContent = `${language} · ${scopeLabel()}`;
-    const chunk = bookChunks[state.chunk];
-    elements.overviewSelection.textContent = `Current book: ${chunk.id}`;
+    const chunk = cardChunks[state.chunk];
+    elements.overviewSelection.textContent = `Book ${chunk.book} · Card ${chunk.card}`;
   }
 
   function filteredMatches(matches) {
@@ -433,27 +456,27 @@
     if (state.source !== "quotations") params.set("source", state.source);
     if (state.word) params.set("word", `${state.word.start}-${state.word.stop}`);
     const suffix = params.toString();
-    const passage = state.citation || bookChunks[state.chunk].id;
+    const passage = state.citation || cardChunks[state.chunk].id;
     history.replaceState(null, "", `${viewerBasePath()}:${passage}${suffix ? `&${suffix}` : ""}`);
   }
 
   function render() {
-    const chunk = bookChunks[state.chunk];
+    const chunk = cardChunks[state.chunk];
     const matches = matchesForChunk(chunk);
     const heatMatches = matchesInScope(matches);
     const selectedLines = chunkLines(chunk);
     const firstLine = selectedLines[0] ? selectedLines[0].name : "1";
     const lastLine = selectedLines[selectedLines.length - 1] ? selectedLines[selectedLines.length - 1].name : "—";
     elements.chunkSelect.value = String(state.chunk);
-    elements.chunkKind.textContent = `Book ${chunk.id}`;
+    elements.chunkKind.textContent = `Book ${chunk.book} · Card ${chunk.card}`;
     elements.chunkTitle.textContent = `Lines ${firstLine}–${lastLine}`;
-    elements.chunkSummary.textContent = `${heatMatches.length.toLocaleString()} detected reuse passages in ${new Set(heatMatches.map(({ track }) => track.id)).size.toLocaleString()} ${scopeLabel()} overlap this book${state.language === "all" ? "" : ` in ${languageNames[state.language] || state.language}`}.`;
+    elements.chunkSummary.textContent = `${heatMatches.length.toLocaleString()} detected reuse passages in ${new Set(heatMatches.map(({ track }) => track.id)).size.toLocaleString()} ${scopeLabel()} overlap this card${state.language === "all" ? "" : ` in ${languageNames[state.language] || state.language}`}.`;
     elements.totalReuseCount.textContent = tracks
       .filter((track) => sourceMatches(track) && languageMatches(track))
       .reduce((total, track) => total + track.notes.length, 0)
       .toLocaleString();
     elements.previousChunk.disabled = state.chunk === 0;
-    elements.nextChunk.disabled = state.chunk === bookChunks.length - 1;
+    elements.nextChunk.disabled = state.chunk === cardChunks.length - 1;
     renderOverview();
     renderText(chunk, heatMatches);
     renderMatches(matches);
@@ -461,13 +484,13 @@
   }
 
   function populateControls() {
-    elements.sceneCount.textContent = bookChunks.length;
+    elements.sceneCount.textContent = cardChunks.length;
     elements.chunkSelect.replaceChildren(
-      ...bookChunks.map((chunk, index) => {
+      ...cardChunks.map((chunk, index) => {
         const option = document.createElement("option");
         option.value = String(index);
         const selectedLines = chunkLines(chunk);
-        option.textContent = `Book ${chunk.id}: lines ${selectedLines[0].name}–${selectedLines[selectedLines.length - 1].name}`;
+        option.textContent = `Book ${chunk.book} · Card ${chunk.card}: lines ${selectedLines[0].name}–${selectedLines[selectedLines.length - 1].name}`;
         return option;
       })
     );
@@ -518,9 +541,9 @@
     if (requestedChunk >= 0) {
       state.chunk = requestedChunk;
       state.citation = String(requestedPassage);
-    } else if (requestedBook >= 1 && requestedBook <= bookChunks.length) {
-      state.chunk = requestedBook - 1;
-      state.citation = bookChunks[state.chunk].id;
+    } else if (requestedBook >= 1 && requestedBook <= books.length) {
+      state.chunk = cardChunks.findIndex((chunk) => chunk.book === String(requestedBook));
+      state.citation = cardChunks[state.chunk].id;
     }
     if (requestedLanguage && (requestedLanguage === "all" || tracks.some((track) => publicLanguage(track.lang) === requestedLanguage))) {
       state.language = requestedLanguage;
@@ -543,7 +566,7 @@
 
   elements.previousChunk.addEventListener("click", () => {
     state.chunk = Math.max(0, state.chunk - 1);
-    state.citation = bookChunks[state.chunk].id;
+    state.citation = cardChunks[state.chunk].id;
     state.word = null;
     state.limit = PAGE_SIZE;
     render();
@@ -551,8 +574,8 @@
   });
 
   elements.nextChunk.addEventListener("click", () => {
-    state.chunk = Math.min(bookChunks.length - 1, state.chunk + 1);
-    state.citation = bookChunks[state.chunk].id;
+    state.chunk = Math.min(cardChunks.length - 1, state.chunk + 1);
+    state.citation = cardChunks[state.chunk].id;
     state.word = null;
     state.limit = PAGE_SIZE;
     render();
@@ -561,7 +584,7 @@
 
   elements.chunkSelect.addEventListener("change", (event) => {
     state.chunk = Number(event.target.value);
-    state.citation = bookChunks[state.chunk].id;
+    state.citation = cardChunks[state.chunk].id;
     state.word = null;
     state.limit = PAGE_SIZE;
     render();
@@ -582,12 +605,12 @@
   elements.bookFilter.addEventListener("input", (event) => {
     state.query = event.target.value;
     state.limit = PAGE_SIZE;
-    renderMatches(matchesForChunk(bookChunks[state.chunk]));
+    renderMatches(matchesForChunk(cardChunks[state.chunk]));
   });
 
   elements.showMore.addEventListener("click", () => {
     state.limit += PAGE_SIZE;
-    renderMatches(matchesForChunk(bookChunks[state.chunk]));
+    renderMatches(matchesForChunk(cardChunks[state.chunk]));
   });
 
   elements.greekText.addEventListener("click", (event) => {
@@ -613,13 +636,13 @@
   elements.overview.addEventListener("click", (event) => {
     const rect = elements.overview.getBoundingClientRect();
     const character = Math.round((event.clientX - rect.left) / rect.width * sequence.data.length);
-    const nextChunk = bookChunks.findIndex((chunk) => {
+    const nextChunk = cardChunks.findIndex((chunk) => {
       const bounds = chunkBounds(chunk);
       return character >= bounds.start && character <= bounds.stop;
     });
     if (nextChunk >= 0) {
       state.chunk = nextChunk;
-      state.citation = bookChunks[state.chunk].id;
+      state.citation = cardChunks[state.chunk].id;
       state.word = null;
       state.limit = PAGE_SIZE;
       render();
@@ -646,6 +669,6 @@
 
   populateControls();
   readRoute();
-  if (!state.citation) state.citation = bookChunks[state.chunk].id;
+  if (!state.citation) state.citation = cardChunks[state.chunk].id;
   render();
 })();

@@ -30,13 +30,14 @@
   <script src="tracks18.js"></script>
   <script src="tracks19.js"></script>
   <script src="groups.js"></script>
+  <script src="card-chunks.js"></script>
   <script>
     window.epicViewerConfig = {
       baseUrn: "urn:cts:greekLit:tlg0012.tlg001.perseus-grc2",
       workId: "tlg001"
     };
   </script>
-  <script src="../epic-reuse-viewer.js?v=book-chunks" defer></script>
+  <script src="../epic-reuse-viewer.js?v=card-chunks" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -59,19 +60,19 @@
         <p class="urn">urn:cts:greekLit:tlg0012.tlg001.perseus-grc2</p>
       </div>
       <dl class="work-stats" aria-label="Work statistics">
-        <div><dt>Default view</dt><dd>Book</dd></div>
-        <div><dt>Books</dt><dd id="scene-count">24</dd></div>
+        <div><dt>Default view</dt><dd>Card</dd></div>
+        <div><dt>Cards</dt><dd id="scene-count">425</dd></div>
         <div><dt>Reuse passages</dt><dd id="total-reuse-count">—</dd></div>
       </dl>
     </section>
 
     <nav class="chunk-nav" aria-label="Passage navigation">
-      <button class="nav-button" id="previous-chunk" type="button">Previous book</button>
+      <button class="nav-button" id="previous-chunk" type="button">Previous card</button>
       <label class="chunk-picker">
         <span>Passage</span>
-        <select id="chunk-select" aria-label="Choose a book"></select>
+        <select id="chunk-select" aria-label="Choose a card"></select>
       </label>
-      <button class="nav-button" id="next-chunk" type="button">Next book</button>
+      <button class="nav-button" id="next-chunk" type="button">Next card</button>
     </nav>
 
     <section class="overview-panel" aria-labelledby="overview-title">
@@ -80,12 +81,12 @@
           <p class="eyebrow">Whole-work distribution</p>
           <h2 id="overview-title">Reuse overview</h2>
         </div>
-        <p><span id="overview-language">All languages</span> · select a region to move between books</p>
+        <p><span id="overview-language">All languages</span> · select a region to move between cards</p>
       </div>
       <canvas id="reuse-overview" height="112" aria-label="Reuse density across the complete work"></canvas>
       <div class="overview-scale" aria-hidden="true">
         <span>Book 1</span>
-        <strong id="overview-selection">Current book: 1</strong>
+        <strong id="overview-selection">Book 1 · Card 1</strong>
         <span>Book 24</span>
       </div>
     </section>
@@ -94,8 +95,8 @@
       <article class="text-panel" aria-labelledby="chunk-title">
         <div class="panel-heading">
           <div>
-            <p class="eyebrow" id="chunk-kind">Book 1</p>
-            <h2 id="chunk-title">Lines 1–611</h2>
+            <p class="eyebrow" id="chunk-kind">Book 1 · Card 1</p>
+            <h2 id="chunk-title">Lines 1–32</h2>
           </div>
           <div class="passage-actions">
             <button class="quiet-button" id="copy-citation" type="button">Copy citation</button>
@@ -152,7 +153,7 @@
   </main>
 
   <footer>
-    <p>Book boundaries follow the default <code>CTS</code> <code>citeStructure</code> in the Perseus TEI. Line citations open the book containing the cited line.</p>
+    <p>Card boundaries follow the Perseus <code>CTS-card</code> <code>citeStructure</code>. Book-and-line citations open the card containing the cited line.</p>
   </footer>
 </body>
 </html>
