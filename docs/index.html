@@ -5,11 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Browse Greek works with detected text reuse in the Harvard ID1 Million Book Library.">
   <title>Perseus Text Reuse — All Works</title>
-  <link rel="stylesheet" href="home.css?v=universal-1">
+  <link rel="stylesheet" href="home.css?v=perseus-1">
   <script src="home.js?v=universal-1" defer></script>
 </head>
 <body>
-  <header class="site-header"><div class="brand"><span class="brand-mark" aria-hidden="true">Π</span><span><strong>Perseus Text Reuse</strong><small>Open Greek and Latin in the Harvard ID1 Million Book Library</small></span></div><a href="https://github.com/gregorycrane/idi-greek">Data repository</a></header>
+  <header class="site-header">
+    <div class="brand-lockup">
+      <a class="brand-mark-link" href="./" aria-label="Perseus Text Reuse home"><img class="brand-mark" src="assets/perseus-running-man.png" alt=""></a>
+      <div class="brand-copy">
+        <a class="brand-title" href="./">Perseus Text Reuse</a>
+        <p>Open Greek and Latin in the <a href="https://institutional.org/institutional-books/" rel="noreferrer">Harvard Institutional Books 1.0 Million Book Library</a> <span class="powered-by">(powered by <a href="https://github.com/dasmiq/passim" rel="noreferrer">Passim</a>)</span></p>
+      </div>
+    </div>
+    <nav class="header-meta" aria-label="Project links"><a href="https://github.com/gregorycrane/idi-greek" rel="noreferrer">Data repository</a></nav>
+  </header>
   <main>
     <section class="hero"><p class="eyebrow">Institutional Books 1.0</p><h1>Greek works in the reuse corpus</h1><p>Explore quotation density, word-level heatmaps, the most quoted phrases, and the books that reuse each passage.</p><dl><div><dt>Works</dt><dd id="work-count">—</dd></div><div><dt>Works with Perseus cards</dt><dd id="card-count">—</dd></div></dl></section>
     <section class="catalog" aria-labelledby="catalog-title">
