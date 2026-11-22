@@ -9,6 +9,18 @@
   const AUTHOR_ID = config.authorId;
   const WORK_ID = config.workId;
   const PAGE_SIZE = 30;
+  // Keep these thresholds together so partial-edition detection is explicit
+  // and can be tuned as the corpus grows.
+  const EDITION_HEURISTICS = Object.freeze({
+    wholeWorkCoverage: 0.6,
+    wholeWorkStart: 0.05,
+    wholeWorkEnd: 0.95,
+    densePartialCoverage: 0.1,
+    densePartialNotes: 250,
+    pageBlockCoverage: 0.05,
+    pageBlockNotes: 50,
+    pageBlockMedianCharacters: 500
+  });
   const languageNames = {
     deu: "German", grc: "Greek", eng: "English", fra: "French",
     ita: "Italian", lat: "Latin"
@@ -127,6 +139,7 @@
     quotationSort: document.querySelector("#quotation-sort"),
     reuseList: document.querySelector("#reuse-list"),
     sceneCount: document.querySelector("#scene-count"),
+    selectionLabel: document.querySelector("#selection-label"),
     selectedWord: document.querySelector("#selected-word"),
     showMore: document.querySelector("#show-more"),
     sourceFilter: document.querySelector("#source-filter"),
@@ -197,8 +210,22 @@
     const coverage = covered / sequence.data.length;
     const first = spans.length ? spans[0][0] / sequence.data.length : 1;
     const last = spans.length ? spans.reduce((maximum, span) => Math.max(maximum, span[1]), 0) / sequence.data.length : 0;
+    const lengths = spans.map(([start, stop]) => stop - start + 1).sort((a, b) => a - b);
+    const medianCharacters = lengths.length ? lengths[Math.floor(lengths.length / 2)] : 0;
+    const wholeWork = coverage >= EDITION_HEURISTICS.wholeWorkCoverage
+      && first <= EDITION_HEURISTICS.wholeWorkStart
+      && last >= EDITION_HEURISTICS.wholeWorkEnd;
+    const densePartialEdition = coverage >= EDITION_HEURISTICS.densePartialCoverage
+      && spans.length >= EDITION_HEURISTICS.densePartialNotes;
+    const pageBlockEdition = coverage >= EDITION_HEURISTICS.pageBlockCoverage
+      && spans.length >= EDITION_HEURISTICS.pageBlockNotes
+      && medianCharacters >= EDITION_HEURISTICS.pageBlockMedianCharacters;
     track.coverage = coverage;
-    track.isEdition = coverage >= 0.6 && first <= 0.05 && last >= 0.95;
+    track.medianSpanCharacters = medianCharacters;
+    track.editionReason = wholeWork
+      ? "whole-work coverage"
+      : (densePartialEdition ? "dense partial-edition coverage" : (pageBlockEdition ? "page-sized alignment blocks" : null));
+    track.isEdition = Boolean(track.editionReason);
   }
 
   tracks.forEach(classifyTrack);
@@ -669,8 +696,10 @@
     elements.visibleReuseCount.textContent = filtered.length.toLocaleString();
     elements.wordSelection.hidden = !state.word && !state.phrase;
     if (state.phrase) {
-      elements.selectedWord.textContent = `Complete phrase: “${state.phrase.text}”`;
+      elements.selectionLabel.textContent = "Quotation passages containing the complete phrase";
+      elements.selectedWord.textContent = `“${state.phrase.text}”`;
     } else if (state.word) {
+      elements.selectionLabel.textContent = "Multiword quotations containing";
       elements.selectedWord.textContent = `“${state.word.text}” (line ${state.word.line})`;
     }
 
@@ -694,6 +723,11 @@
           const title = document.createElement("h3");
           title.textContent = track.name;
 
+          const spanMeta = document.createElement("p");
+          spanMeta.className = "reuse-span-meta";
+          const wordCount = sequence.data.slice(note.start, note.stop + 1).trim().split(/\s+/u).filter(Boolean).length;
+          spanMeta.textContent = `Matched quotation · ${wordCount.toLocaleString()} ${wordCount === 1 ? "word" : "words"}`;
+
           const quote = renderReuseQuote(note);
 
           const link = document.createElement("a");
@@ -702,7 +736,7 @@
           link.rel = "noreferrer";
           link.textContent = `Open ${note.sloc || "page"} in HathiTrust`;
 
-          card.append(meta, title, quote, link);
+          card.append(meta, title, spanMeta, quote, link);
           return card;
         })
       );
