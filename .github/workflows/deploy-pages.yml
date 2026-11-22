@@ -1,0 +1,55 @@
+name: Deploy text reuse viewer to Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the lightweight site files
+        uses: actions/checkout@v4
+        with:
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            docs/404.html
+            docs/index.html
+            docs/home.css
+            docs/home.js
+            docs/catalog.json
+            docs/assets
+            docs/viewer
+
+      - name: Assemble the Pages artifact
+        run: |
+          mkdir -p _site
+          cp docs/404.html docs/index.html docs/home.css docs/home.js docs/catalog.json _site/
+          cp -R docs/assets docs/viewer _site/
+          touch _site/.nojekyll
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload the Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

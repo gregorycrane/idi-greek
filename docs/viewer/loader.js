@@ -3,6 +3,10 @@
 
   const loading = document.querySelector("#loading-state");
   const main = document.querySelector("#viewer-main");
+  const localData = location.hostname === "127.0.0.1" || location.hostname === "localhost";
+  const dataRoot = localData
+    ? "../quotes/"
+    : "https://raw.githubusercontent.com/gregorycrane/idi-greek/main/docs/quotes/";
 
   function loadScript(source) {
     return new Promise((resolve, reject) => {
@@ -12,6 +16,19 @@
       script.onerror = () => reject(new Error(`Could not load ${source}`));
       document.head.append(script);
     });
+  }
+
+  async function loadDataScript(source) {
+    if (localData) return loadScript(source);
+    const response = await fetch(source);
+    if (!response.ok) throw new Error(`Could not load ${source}`);
+    const blob = new Blob([await response.text()], { type: "application/javascript" });
+    const blobUrl = URL.createObjectURL(blob);
+    try {
+      await loadScript(blobUrl);
+    } finally {
+      URL.revokeObjectURL(blobUrl);
+    }
   }
 
   function titleCase(value) {
@@ -39,11 +56,11 @@
       ? "Canonical Perseus card boundaries are used for this work; CTS citations open the card containing the cited passage."
       : "Navigation follows this work’s CTS citation structure; compact line-level works are grouped into readable passages.";
 
-    const base = `../quotes/${work.authorId}/${work.workId}/`;
-    await loadScript(`${base}sequence.js`);
-    await loadScript(`${base}structure.js`);
-    for (const file of work.trackFiles) await loadScript(`${base}${file}`);
-    if (work.hasCards) await loadScript(`${base}card-chunks.js`);
+    const base = `${dataRoot}${work.authorId}/${work.workId}/`;
+    await loadDataScript(`${base}sequence.js`);
+    await loadDataScript(`${base}structure.js`);
+    for (const file of work.trackFiles) await loadDataScript(`${base}${file}`);
+    if (work.hasCards) await loadDataScript(`${base}card-chunks.js`);
 
     window.universalViewerConfig = {
       authorId: work.authorId,
