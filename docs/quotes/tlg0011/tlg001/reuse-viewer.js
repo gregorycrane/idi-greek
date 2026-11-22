@@ -316,7 +316,7 @@
     context.moveTo(0, chartBottom);
     values.forEach((value, index) => {
       const x = index / (bins - 1) * width;
-      const normalized = Math.log1p(value) / Math.log1p(maximum);
+      const normalized = value / maximum;
       context.lineTo(x, chartBottom - normalized * chartHeight);
     });
     context.lineTo(width, chartBottom);
