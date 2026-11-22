@@ -1,67 +1,123 @@
-<html>
+<!doctype html>
+<html lang="en">
 <head>
-<title>Sophocles. Ajax</title>
-<meta charset="utf-8" />
-<!-- 3rd party libraries -->
-<script src="../../../highbrow/lib/js/jquery.min.js"></script>
-<script src="../../../highbrow/lib/js/jquery.dataTables.min.js" language="javascript" type="text/javascript"></script> 
-<script src="../../../highbrow/lib/js/jquery-ui.min.js" type="text/javascript"></script> 
-<link href="../../../highbrow/lib/css/jquery-ui.css" type="text/css" rel="stylesheet" /> 
-<script src="../../../highbrow/lib/js/processing.min.js" language="javascript"></script>
-<script src="../../../highbrow/lib/js/jquery.ba-bbq.min.js" language="javascript"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Explore reuse of Sophocles's Ajax in the Institutional Books corpus.">
+  <title>Sophocles, Ajax — Text Reuse Viewer</title>
+  <link rel="stylesheet" href="../../drama-reuse-viewer.css?v=card-viewer-2">
 
-<!-- highbrow code -->
-<script src="../../../highbrow/js/highbrow.main.js"></script>
-<script src="../../../highbrow/js/highbrow.settings.js"></script>
-<script src="../../../highbrow/js/highbrow.search.js"></script>
-<script src="../../../highbrow/js/highbrow.spanel.js"></script>
-<script src="../../../highbrow/js/highbrow.npanel.js"></script>
-<script src="../../../highbrow/js/highbrow.linker.js"></script>
-<script src="../../../highbrow/js/highbrow.map.js"></script>
-
-<link rel="stylesheet" href="../../../highbrow/highbrow.css" type="text/css" />
-
-<!-- highbrow data and configuration -->
-<script src="sequence.js" language="javascript"></script>
-<script src="structure.js" language="javascript"></script>
-<script src="tracks0.js" language="javascript"></script>
-<script src="tracks1.js" language="javascript"></script>
-<script src="tracks10.js" language="javascript"></script>
-<script src="tracks11.js" language="javascript"></script>
-<script src="tracks12.js" language="javascript"></script>
-<script src="tracks13.js" language="javascript"></script>
-<script src="tracks14.js" language="javascript"></script>
-<script src="tracks15.js" language="javascript"></script>
-<script src="tracks16.js" language="javascript"></script>
-<script src="tracks17.js" language="javascript"></script>
-<script src="tracks18.js" language="javascript"></script>
-<script src="tracks19.js" language="javascript"></script>
-<script src="tracks2.js" language="javascript"></script>
-<script src="tracks3.js" language="javascript"></script>
-<script src="tracks4.js" language="javascript"></script>
-<script src="tracks5.js" language="javascript"></script>
-<script src="tracks6.js" language="javascript"></script>
-<script src="tracks7.js" language="javascript"></script>
-<script src="tracks8.js" language="javascript"></script>
-<script src="tracks9.js" language="javascript"></script>
-<script src="groups.js" language="javascript"></script>
-
+  <script src="sequence.js"></script>
+  <script src="structure.js"></script>
+  <script src="tracks0.js"></script>
+  <script src="tracks1.js"></script>
+  <script src="tracks2.js"></script>
+  <script src="tracks3.js"></script>
+  <script src="tracks4.js"></script>
+  <script src="tracks5.js"></script>
+  <script src="tracks6.js"></script>
+  <script src="tracks7.js"></script>
+  <script src="tracks8.js"></script>
+  <script src="tracks9.js"></script>
+  <script src="tracks10.js"></script>
+  <script src="tracks11.js"></script>
+  <script src="tracks12.js"></script>
+  <script src="tracks13.js"></script>
+  <script src="tracks14.js"></script>
+  <script src="tracks15.js"></script>
+  <script src="tracks16.js"></script>
+  <script src="tracks17.js"></script>
+  <script src="tracks18.js"></script>
+  <script src="tracks19.js"></script>
+  <script src="groups.js"></script>
+  <script src="card-chunks.js"></script>
+  <script>
+    window.dramaViewerConfig = {
+      authorId: "tlg0011",
+      authorName: "Sophocles",
+      baseUrn: "urn:cts:greekLit:tlg0011.tlg003.perseus-grc2",
+      workId: "tlg003"
+    };
+  </script>
+  <script src="../../drama-reuse-viewer.js?v=card-viewer-2" defer></script>
 </head>
-
 <body>
+  <header class="site-header">
+    <div class="brand"><span class="brand-mark" aria-hidden="true">Π</span><span>Perseus Text Reuse</span></div>
+    <div class="header-meta">
+      <a href="https://github.com/gregorycrane/idi-greek" rel="noreferrer">Data repository</a>
+      <span aria-hidden="true">·</span>
+      <a href="https://github.com/PerseusDL/canonical-greekLit/blob/master/data/tlg0011/tlg003/tlg0011.tlg003.perseus-grc2.xml" rel="noreferrer">TEI source</a>
+    </div>
+  </header>
 
-<div id="HB_container"></div>
-<script language="javascript">
-var hbconf= {};
-hbconf.sequence = sequence;
-hbconf.tracks = [...tracks0,...tracks1,...tracks10,...tracks11,...tracks12,...tracks13,...tracks14,...tracks15,...tracks16,...tracks17,...tracks18,...tracks19,...tracks2,...tracks3,...tracks4,...tracks5,...tracks6,...tracks7,...tracks8,...tracks9];
-hbconf.groups = groups;
-hbconf.structure = structure;
-hbconf.container = "HB_container"
-var hb = new Highbrow(hbconf);
-</script>
+  <main>
+    <section class="work-heading" aria-labelledby="work-title">
+      <div>
+        <p class="eyebrow">Sophocles · Greek tragedy</p>
+        <h1 id="work-title">Ajax</h1>
+        <p class="urn">urn:cts:greekLit:tlg0011.tlg003.perseus-grc2</p>
+      </div>
+      <dl class="work-stats" aria-label="Work statistics">
+        <div><dt>Default view</dt><dd>Card</dd></div>
+        <div><dt>Cards</dt><dd id="scene-count">64</dd></div>
+        <div><dt>Reuse passages</dt><dd id="total-reuse-count">—</dd></div>
+      </dl>
+    </section>
 
+    <nav class="chunk-nav" aria-label="Passage navigation">
+      <button class="nav-button" id="previous-chunk" type="button">Previous card</button>
+      <label class="chunk-picker"><span>Passage</span><select id="chunk-select" aria-label="Choose a card"></select></label>
+      <button class="nav-button" id="next-chunk" type="button">Next card</button>
+    </nav>
+
+    <section class="overview-panel" aria-labelledby="overview-title">
+      <div class="overview-heading">
+        <div><p class="eyebrow">Whole-work distribution</p><h2 id="overview-title">Reuse overview</h2></div>
+        <p><span id="overview-language">All languages</span> · select a region to move between cards</p>
+      </div>
+      <canvas id="reuse-overview" height="112" aria-label="Reuse density across the complete work"></canvas>
+      <div class="overview-scale" aria-hidden="true">
+        <span>Line 1</span><strong id="overview-selection">Current card: 1</strong><span>Line 1420</span>
+      </div>
+    </section>
+
+    <section class="phrase-panel" aria-labelledby="phrase-title">
+      <div class="phrase-heading">
+        <div><p class="eyebrow">Ranked reuse spans</p><h2 id="phrase-title">Most quoted phrases</h2></div>
+        <label class="phrase-scope"><span>Scope</span><select id="phrase-scope"><option value="work">Work</option><option value="card" selected>Card</option></select></label>
+      </div>
+      <p class="phrase-status" id="phrase-status"></p>
+      <div class="phrase-list" id="phrase-list" aria-live="polite"></div>
+    </section>
+
+    <section class="workspace">
+      <article class="text-panel" aria-labelledby="chunk-title">
+        <div class="panel-heading">
+          <div><p class="eyebrow" id="chunk-kind">Card 1</p><h2 id="chunk-title">Lines 1–35</h2></div>
+          <div class="passage-actions"><button class="quiet-button" id="copy-citation" type="button">Copy citation</button></div>
+        </div>
+        <p class="chunk-summary" id="chunk-summary" aria-live="polite"></p>
+        <div class="legend" aria-label="Word-level reuse heatmap legend">
+          <strong>Word-level heatmap</strong><span><i class="word-swatch heat-0"></i>No match</span><span><i class="word-swatch heat-1"></i>Some reuse</span><span><i class="word-swatch heat-4"></i>Frequent reuse</span><em>Select a word to inspect its passages.</em>
+        </div>
+        <ol class="greek-text" id="greek-text" aria-label="Greek text"></ol>
+      </article>
+
+      <aside class="reuse-panel" aria-labelledby="reuse-title">
+        <div class="panel-heading compact"><div><p class="eyebrow">Institutional Books 1.0</p><h2 id="reuse-title">Text reuse</h2></div><span class="count-badge" id="visible-reuse-count">0</span></div>
+        <div class="filters">
+          <label><span>Source type</span><select id="source-filter"><option value="quotations" selected>Quotations only</option><option value="all">All books</option><option value="editions">Full editions only</option></select></label>
+          <label><span>Language</span><select id="language-filter"></select></label>
+          <label><span>Find a book</span><input id="book-filter" type="search" placeholder="Title or date"></label>
+        </div>
+        <div class="word-selection" id="word-selection" hidden><span>Passages quoting <strong id="selected-word"></strong></span><button id="clear-word" type="button">Show whole card</button></div>
+        <div class="reuse-list" id="reuse-list" aria-live="polite"></div>
+        <button class="show-more" id="show-more" type="button" hidden>Show more matches</button>
+      </aside>
+    </section>
+  </main>
+
+  <footer><p>Card boundaries follow the canonical Perseus <code>CTS</code> card milestones. Line citations open the card containing the cited line.</p></footer>
 </body>
-
 </html>
-    
