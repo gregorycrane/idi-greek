@@ -103,7 +103,7 @@ def render_index(author_id, work_id, author_name, genre, title, chunks, lines):
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Explore reuse of {html.escape(author_name)}'s {html.escape(title)} in the Institutional Books corpus.">
   <title>{html.escape(author_name)}, {html.escape(title)} — Text Reuse Viewer</title>
-  <link rel="stylesheet" href="../../drama-reuse-viewer.css?v=card-viewer-3">
+  <link rel="stylesheet" href="../../drama-reuse-viewer.css?v=card-viewer-4">
 
   <script src="sequence.js"></script>
   <script src="structure.js"></script>
@@ -118,7 +118,7 @@ def render_index(author_id, work_id, author_name, genre, title, chunks, lines):
       workId: "{work_id}"
     }};
   </script>
-  <script src="../../drama-reuse-viewer.js?v=card-viewer-2" defer></script>
+  <script src="../../drama-reuse-viewer.js?v=card-viewer-4" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -188,6 +188,7 @@ def render_index(author_id, work_id, author_name, genre, title, chunks, lines):
         <div class="filters">
           <label><span>Source type</span><select id="source-filter"><option value="quotations" selected>Quotations only</option><option value="all">All books</option><option value="editions">Full editions only</option></select></label>
           <label><span>Language</span><select id="language-filter"></select></label>
+          <label><span>Sort quotations</span><select id="quotation-sort"><option value="text" selected>Text order</option><option value="oldest">Publication date: oldest</option><option value="newest">Publication date: newest</option></select></label>
           <label><span>Find a book</span><input id="book-filter" type="search" placeholder="Title or date"></label>
         </div>
         <div class="word-selection" id="word-selection" hidden><span>Passages quoting <strong id="selected-word"></strong></span><button id="clear-word" type="button">Show whole card</button></div>

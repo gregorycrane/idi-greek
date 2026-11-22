@@ -41,7 +41,7 @@
   const phraseCache = new Map();
   const state = {
     chunk: 0, citation: null, language: "all", source: "quotations", query: "",
-    word: null, phrase: null, phraseScope: "card", limit: PAGE_SIZE
+    sort: "text", word: null, phrase: null, phraseScope: "card", limit: PAGE_SIZE
   };
 
   const elements = {
@@ -62,6 +62,7 @@
     phraseScope: document.querySelector("#phrase-scope"),
     phraseStatus: document.querySelector("#phrase-status"),
     previousChunk: document.querySelector("#previous-chunk"),
+    quotationSort: document.querySelector("#quotation-sort"),
     reuseList: document.querySelector("#reuse-list"),
     sceneCount: document.querySelector("#scene-count"),
     selectedWord: document.querySelector("#selected-word"),
@@ -140,6 +141,47 @@
   function sourceMatches(track) {
     if (state.source === "all") return true;
     return state.source === "editions" ? track.isEdition : !track.isEdition;
+  }
+
+  function publicationYear(track) {
+    const match = String(track.date || "").match(/\b(\d{4})\b/);
+    return match ? Number(match[1]) : null;
+  }
+
+  function defaultMatchOrder(a, b) {
+    const lineDelta = a.note.start - b.note.start;
+    return lineDelta || Number(a.track.date || 0) - Number(b.track.date || 0);
+  }
+
+  function sortFilteredMatches(matches) {
+    if (state.sort === "text") return matches;
+    const direction = state.sort === "oldest" ? 1 : -1;
+    return matches.sort((a, b) => {
+      const aYear = publicationYear(a.track);
+      const bYear = publicationYear(b.track);
+      if (aYear === null && bYear !== null) return 1;
+      if (aYear !== null && bYear === null) return -1;
+      if (aYear !== bYear) return direction * (aYear - bYear);
+      return defaultMatchOrder(a, b) || a.track.name.localeCompare(b.track.name);
+    });
+  }
+
+  function updateLanguageOptions(matches) {
+    const counts = new Map();
+    [...elements.languageFilter.options].forEach((option) => {
+      if (option.value !== "all") counts.set(option.value, 0);
+    });
+    matches.forEach(({ track }) => {
+      if (track.isEdition) return;
+      const language = publicLanguage(track.lang);
+      counts.set(language, (counts.get(language) || 0) + 1);
+    });
+    const total = [...counts.values()].reduce((sum, count) => sum + count, 0);
+    [...elements.languageFilter.options].forEach((option) => {
+      const count = option.value === "all" ? total : (counts.get(option.value) || 0);
+      option.textContent = `${option.dataset.label} (${count.toLocaleString()})`;
+      option.disabled = option.value !== "all" && count === 0;
+    });
   }
 
   function scopeLabel() {
@@ -291,10 +333,7 @@
         }
       });
     });
-    return matches.sort((a, b) => {
-      const lineDelta = a.note.start - b.note.start;
-      return lineDelta || Number(a.track.date || 0) - Number(b.track.date || 0);
-    });
+    return matches.sort(defaultMatchOrder);
   }
 
   function lineMatchCount(line, matches) {
@@ -538,7 +577,7 @@
   }
 
   function renderMatches(matches) {
-    const filtered = filteredMatches(matches);
+    const filtered = sortFilteredMatches(filteredMatches(matches));
     const visible = filtered.slice(0, state.limit);
     elements.visibleReuseCount.textContent = filtered.length.toLocaleString();
     elements.wordSelection.hidden = !state.word && !state.phrase;
@@ -590,6 +629,7 @@
     const params = new URLSearchParams();
     if (state.language !== "all") params.set("lang", state.language);
     if (state.source !== "quotations") params.set("source", state.source);
+    if (state.sort !== "text") params.set("sort", state.sort);
     if (state.word) params.set("word", `${state.word.start}-${state.word.stop}`);
     if (state.phrase) params.set("phrase", `${state.phrase.start}-${state.phrase.stop}`);
     if (state.phraseScope !== "card") params.set("phraseScope", state.phraseScope);
@@ -601,6 +641,7 @@
   function render() {
     const chunk = cardChunks[state.chunk];
     const matches = matchesForChunk(chunk);
+    updateLanguageOptions(matches);
     const heatMatches = matchesInScope(matches);
     const selectedLines = chunkLines(chunk);
     const firstLine = selectedLines[0] ? selectedLines[0].name : "1";
@@ -638,12 +679,14 @@
     const all = document.createElement("option");
     all.value = "all";
     all.textContent = "All languages";
+    all.dataset.label = "All languages";
     elements.languageFilter.replaceChildren(
       all,
       ...languages.map((language) => {
         const option = document.createElement("option");
         option.value = language;
         option.textContent = languageNames[language] || language;
+        option.dataset.label = languageNames[language] || language;
         return option;
       })
     );
@@ -674,6 +717,7 @@
 
     const requestedLanguage = publicLanguage(params.get("lang"));
     const requestedSource = params.get("source");
+    const requestedSort = params.get("sort");
     const requestedWord = params.get("word");
     const requestedPhrase = params.get("phrase");
     const requestedPhraseScope = params.get("phraseScope");
@@ -689,6 +733,10 @@
     if (["quotations", "all", "editions"].includes(requestedSource)) {
       state.source = requestedSource;
       elements.sourceFilter.value = requestedSource;
+    }
+    if (["text", "oldest", "newest"].includes(requestedSort)) {
+      state.sort = requestedSort;
+      elements.quotationSort.value = requestedSort;
     }
     if (["work", "card"].includes(requestedPhraseScope)) state.phraseScope = requestedPhraseScope;
     const wordBounds = requestedWord && requestedWord.match(/^(\d+)-(\d+)$/);
@@ -750,6 +798,12 @@
   elements.sourceFilter.addEventListener("change", (event) => {
     state.source = event.target.value;
     state.phrase = null;
+    state.limit = PAGE_SIZE;
+    render();
+  });
+
+  elements.quotationSort.addEventListener("change", (event) => {
+    state.sort = event.target.value;
     state.limit = PAGE_SIZE;
     render();
   });
