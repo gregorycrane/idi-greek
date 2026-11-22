@@ -103,7 +103,7 @@ def render_index(author_id, work_id, author_name, genre, title, chunks, lines):
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Explore reuse of {html.escape(author_name)}'s {html.escape(title)} in the Institutional Books corpus.">
   <title>{html.escape(author_name)}, {html.escape(title)} — Text Reuse Viewer</title>
-  <link rel="stylesheet" href="../../drama-reuse-viewer.css?v=card-viewer-2">
+  <link rel="stylesheet" href="../../drama-reuse-viewer.css?v=card-viewer-3">
 
   <script src="sequence.js"></script>
   <script src="structure.js"></script>

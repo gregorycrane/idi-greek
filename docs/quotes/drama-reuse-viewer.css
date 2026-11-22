@@ -194,7 +194,7 @@ select:focus, input:focus, button:focus-visible { outline: 3px solid rgba(47,111
 .reuse-card:hover { background: #f8fafb; }
 .reuse-meta { margin: 0 0 .3rem; color: var(--teal); font-size: .75rem; font-weight: 750; letter-spacing: .02em; }
 .reuse-card h3 { margin: 0 0 .45rem; color: var(--navy); font-family: Georgia, "Times New Roman", serif; font-size: 1rem; font-weight: 600; line-height: 1.35; }
-.reuse-quote { max-height: 9em; overflow: auto; margin: .65rem 0 .7rem; padding: .55rem .7rem; border-left: 3px solid #8fbab7; background: #f4f8f7; color: #263c42; font-family: "New Athena Unicode", "Noto Serif", Georgia, serif; font-size: 1rem; line-height: 1.55; }
+.reuse-quote { max-height: 9em; overflow: auto; margin: .65rem 0 .7rem; padding: .55rem .7rem; border-left: 3px solid #8fbab7; background: #f4f8f7; color: #263c42; font-family: "New Athena Unicode", "Noto Serif", Georgia, serif; font-size: 1rem; line-height: 1.55; white-space: pre-line; }
 .reuse-quote mark { padding: .03em .08em; border-radius: 2px; background: #f4c85d; color: #2c2020; font-weight: 700; }
 .reuse-card a { font-size: .82rem; font-weight: 700; text-decoration-thickness: 1px; text-underline-offset: 2px; }
 .show-more { margin: .8rem 1.35rem 1.1rem; padding: .65rem 1rem; }
