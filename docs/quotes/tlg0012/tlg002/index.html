@@ -31,13 +31,15 @@
   <script src="tracks19.js"></script>
   <script src="groups.js"></script>
   <script src="card-chunks.js"></script>
+  <script src="../source-classification-config.js?v=source-types-1"></script>
+  <script src="../source-classifier.js?v=source-types-1"></script>
   <script>
     window.epicViewerConfig = {
       baseUrn: "urn:cts:greekLit:tlg0012.tlg002.perseus-grc2",
       workId: "tlg002"
     };
   </script>
-  <script src="../epic-reuse-viewer.js?v=phrase-rankings" defer></script>
+  <script src="../epic-reuse-viewer.js?v=source-types-1" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -145,9 +147,9 @@
           <label>
             <span>Source type</span>
             <select id="source-filter">
-              <option value="quotations" selected>Quotations only</option>
+              <option value="quotations" selected>Exclude editions</option>
               <option value="all">All books</option>
-              <option value="editions">Full editions only</option>
+              <option value="editions">Editions only</option>
             </select>
           </label>
           <label>

@@ -120,35 +120,15 @@
     });
   }
 
-  function classifyTrack(track) {
-    const spans = track.notes
-      .map((note) => [Math.max(0, note.start), Math.min(sequence.data.length - 1, note.stop)])
-      .sort((a, b) => a[0] - b[0]);
-    let covered = 0;
-    let currentStart = null;
-    let currentStop = null;
-    spans.forEach(([start, stop]) => {
-      if (currentStart === null) {
-        currentStart = start;
-        currentStop = stop;
-      } else if (start <= currentStop + 1) {
-        currentStop = Math.max(currentStop, stop);
-      } else {
-        covered += currentStop - currentStart + 1;
-        currentStart = start;
-        currentStop = stop;
-      }
+  tracks.forEach((track) => {
+    track.sourceClassification = window.sourceClassifier.classify({
+      track,
+      workId: WORK_ID,
+      workLength: sequence.data.length
     });
-    if (currentStart !== null) covered += currentStop - currentStart + 1;
-
-    const coverage = covered / sequence.data.length;
-    const first = spans.length ? spans[0][0] / sequence.data.length : 1;
-    const last = spans.length ? spans.reduce((maximum, span) => Math.max(maximum, span[1]), 0) / sequence.data.length : 0;
-    track.coverage = coverage;
-    track.isEdition = coverage >= 0.6 && first <= 0.05 && last >= 0.95;
-  }
-
-  tracks.forEach(classifyTrack);
+    track.coverage = track.sourceClassification.metrics.coverage;
+    track.isEdition = track.sourceClassification.isEdition;
+  });
 
   function sourceMatches(track) {
     if (state.source === "all") return true;
@@ -156,9 +136,9 @@
   }
 
   function scopeLabel() {
-    if (state.source === "editions") return "full editions";
+    if (state.source === "editions") return "editions";
     if (state.source === "all") return "all books";
-    return "quotation sources";
+    return "non-edition sources";
   }
 
   function phraseScopeDetails() {
@@ -578,9 +558,10 @@
 
           const meta = document.createElement("p");
           meta.className = "reuse-meta";
-          const sourceType = track.isEdition ? "Full edition" : "Quotation";
+          const sourceType = track.sourceClassification.label;
           const language = publicLanguage(track.lang);
           meta.textContent = `${lineRangeForNote(note)} · ${sourceType} · ${languageNames[language] || language} · ${track.date || "Undated"}`;
+          meta.title = `${track.sourceClassification.reason} (classification rules ${track.sourceClassification.ruleVersion})`;
 
           const title = document.createElement("h3");
           title.textContent = track.name;
