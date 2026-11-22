@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Opening passage…</title>
+</head>
+<body>
+  <p>Opening the requested CTS passage…</p>
+  <script>
+    (function () {
+      const route = location.pathname.match(/^(.*\/quotes\/tlg\d{4}\/)(tlg\d+)\.([^&/]+)(?:&(.*))?$/);
+      if (!route) {
+        document.body.textContent = "The requested page was not found.";
+        return;
+      }
+
+      sessionStorage.setItem("idi-greek-route", JSON.stringify({
+        work: route[2],
+        passage: decodeURIComponent(route[3]),
+        query: route[4] || ""
+      }));
+      location.replace(`${route[1]}${route[2]}/`);
+    }());
+  </script>
+</body>
+</html>

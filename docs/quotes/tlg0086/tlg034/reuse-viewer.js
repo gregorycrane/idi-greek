@@ -2,9 +2,10 @@
   "use strict";
 
   const BASE_URN = "urn:cts:greekLit:tlg0086.tlg034";
+  const WORK_ID = "tlg034";
   const PAGE_SIZE = 30;
   const languageNames = {
-    deu: "German", ell: "Greek", eng: "English", fra: "French",
+    deu: "German", grc: "Greek", eng: "English", fra: "French",
     ita: "Italian", lat: "Latin"
   };
 
@@ -60,6 +61,19 @@
 
   function displayGreek(value) {
     return value.normalize("NFC");
+  }
+
+  function publicLanguage(language) {
+    return language === "ell" ? "grc" : language;
+  }
+
+  function languageMatches(track) {
+    return state.language === "all" || publicLanguage(track.lang) === state.language;
+  }
+
+  function viewerBasePath() {
+    const match = location.pathname.match(/^(.*\/quotes\/tlg0086\/)tlg034(?:[./]|$)/);
+    return `${match ? match[1] : "/quotes/tlg0086/"}${WORK_ID}`;
   }
 
   function classifyTrack(track) {
@@ -226,7 +240,7 @@
 
   function matchesInScope(matches) {
     return matches.filter(({ track }) =>
-      sourceMatches(track) && (state.language === "all" || track.lang === state.language)
+      sourceMatches(track) && languageMatches(track)
     );
   }
 
@@ -246,7 +260,7 @@
     const textLength = sequence.data.length;
     tracks.forEach((track) => {
       if (!sourceMatches(track)) return;
-      if (state.language !== "all" && track.lang !== state.language) return;
+      if (!languageMatches(track)) return;
       track.notes.forEach((note) => {
         const start = Math.max(0, Math.min(bins - 1, Math.floor(note.start / textLength * bins)));
         const end = Math.max(start, Math.min(bins - 1, Math.floor(note.stop / textLength * bins)));
@@ -320,11 +334,11 @@
   function filteredMatches(matches) {
     const query = state.query.trim().toLocaleLowerCase();
     return matches.filter(({ track, note }) => {
-      const languageMatches = state.language === "all" || track.lang === state.language;
+      const trackLanguageMatches = languageMatches(track);
       const sourceTypeMatches = sourceMatches(track);
       const wordMatches = !state.word || overlaps(note.start, note.stop, state.word.start, state.word.stop);
       const queryMatches = !query || `${track.name} ${track.date}`.toLocaleLowerCase().includes(query);
-      return sourceTypeMatches && languageMatches && wordMatches && queryMatches;
+      return sourceTypeMatches && trackLanguageMatches && wordMatches && queryMatches;
     });
   }
 
@@ -398,7 +412,8 @@
           const meta = document.createElement("p");
           meta.className = "reuse-meta";
           const sourceType = track.isEdition ? "Full edition" : "Quotation";
-          meta.textContent = `${lineRangeForNote(note)} · ${sourceType} · ${languageNames[track.lang] || track.lang} · ${track.date || "Undated"}`;
+          const language = publicLanguage(track.lang);
+          meta.textContent = `${lineRangeForNote(note)} · ${sourceType} · ${languageNames[language] || language} · ${track.date || "Undated"}`;
 
           const title = document.createElement("h3");
           title.textContent = track.name;
@@ -421,13 +436,13 @@
     elements.showMore.textContent = `Show ${Math.min(PAGE_SIZE, filtered.length - state.limit)} more matches`;
   }
 
-  function updateHash() {
+  function updateRoute() {
     const params = new URLSearchParams();
-    params.set("section", sectionChunks[state.chunk].id);
     if (state.language !== "all") params.set("lang", state.language);
     if (state.source !== "quotations") params.set("source", state.source);
     if (state.word) params.set("word", `${state.word.start}-${state.word.stop}`);
-    history.replaceState(null, "", `#${params.toString()}`);
+    const suffix = params.toString();
+    history.replaceState(null, "", `${viewerBasePath()}.${sectionChunks[state.chunk].id}${suffix ? `&${suffix}` : ""}`);
   }
 
   function render() {
@@ -439,7 +454,7 @@
     elements.chunkTitle.textContent = `Section ${chunk.id}`;
     elements.chunkSummary.textContent = `${heatMatches.length.toLocaleString()} detected reuse passages in ${new Set(heatMatches.map(({ track }) => track.id)).size.toLocaleString()} ${scopeLabel()} overlap this section${state.language === "all" ? "" : ` in ${languageNames[state.language] || state.language}`}.`;
     elements.totalReuseCount.textContent = tracks
-      .filter((track) => sourceMatches(track) && (state.language === "all" || track.lang === state.language))
+      .filter((track) => sourceMatches(track) && languageMatches(track))
       .reduce((total, track) => total + track.notes.length, 0)
       .toLocaleString();
     elements.previousChunk.disabled = state.chunk === 0;
@@ -447,7 +462,7 @@
     renderOverview();
     renderText(chunk, heatMatches);
     renderMatches(matches);
-    updateHash();
+    updateRoute();
   }
 
   function populateControls() {
@@ -468,7 +483,7 @@
       })
     );
 
-    const languages = [...new Set(tracks.map((track) => track.lang).filter(Boolean))].sort();
+    const languages = [...new Set(tracks.map((track) => publicLanguage(track.lang)).filter(Boolean))].sort();
     const all = document.createElement("option");
     all.value = "all";
     all.textContent = "All languages";
@@ -484,15 +499,32 @@
 
   }
 
-  function readHash() {
-    const params = new URLSearchParams(location.hash.slice(1));
-    const requestedSection = params.get("section");
-    const requestedLanguage = params.get("lang");
+  function readRoute() {
+    const pathRoute = location.pathname.match(/\/tlg034\.([^&/]+)(?:&(.*))?$/);
+    let requestedSection = pathRoute ? decodeURIComponent(pathRoute[1]) : null;
+    let params = pathRoute
+      ? new URLSearchParams(pathRoute[2] || "")
+      : new URLSearchParams(location.hash.slice(1));
+    if (!requestedSection) requestedSection = params.get("section");
+
+    if (!requestedSection) {
+      const savedRoute = sessionStorage.getItem("idi-greek-route");
+      if (savedRoute) {
+        const saved = JSON.parse(savedRoute);
+        if (saved.work === WORK_ID) {
+          requestedSection = saved.passage;
+          params = new URLSearchParams(saved.query || "");
+          sessionStorage.removeItem("idi-greek-route");
+        }
+      }
+    }
+
+    const requestedLanguage = publicLanguage(params.get("lang"));
     const requestedSource = params.get("source");
     const requestedWord = params.get("word");
     const sectionIndex = sectionChunks.findIndex((section) => section.id === requestedSection);
     if (sectionIndex >= 0) state.chunk = sectionIndex;
-    if (requestedLanguage && (requestedLanguage === "all" || tracks.some((track) => track.lang === requestedLanguage))) {
+    if (requestedLanguage && (requestedLanguage === "all" || tracks.some((track) => publicLanguage(track.lang) === requestedLanguage))) {
       state.language = requestedLanguage;
       elements.languageFilter.value = requestedLanguage;
     }
@@ -602,14 +634,14 @@
     }
   });
 
-  window.addEventListener("hashchange", () => {
-    readHash();
+  window.addEventListener("popstate", () => {
+    readRoute();
     render();
   });
 
   new ResizeObserver(() => renderOverview()).observe(elements.overview);
 
   populateControls();
-  readHash();
+  readRoute();
   render();
 })();
