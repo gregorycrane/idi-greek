@@ -42,7 +42,16 @@
       lines: selectedLines
     };
   });
-  const state = { chunk: 0, citation: null, language: "all", source: "quotations", query: "", word: null, limit: PAGE_SIZE };
+  const sourceTokens = [...sequence.data.matchAll(/\S+/gu)].map((match) => ({
+    text: match[0],
+    start: match.index,
+    stop: match.index + match[0].length - 1
+  }));
+  const phraseCache = new Map();
+  const state = {
+    chunk: 0, citation: null, language: "all", source: "quotations", query: "",
+    word: null, phrase: null, phraseScope: "card", limit: PAGE_SIZE
+  };
 
   const elements = {
     bookFilter: document.querySelector("#book-filter"),
@@ -58,6 +67,9 @@
     overview: document.querySelector("#reuse-overview"),
     overviewLanguage: document.querySelector("#overview-language"),
     overviewSelection: document.querySelector("#overview-selection"),
+    phraseList: document.querySelector("#phrase-list"),
+    phraseScope: document.querySelector("#phrase-scope"),
+    phraseStatus: document.querySelector("#phrase-status"),
     previousChunk: document.querySelector("#previous-chunk"),
     reuseList: document.querySelector("#reuse-list"),
     sceneCount: document.querySelector("#scene-count"),
@@ -147,6 +159,143 @@
     if (state.source === "editions") return "full editions";
     if (state.source === "all") return "all books";
     return "quotation sources";
+  }
+
+  function phraseScopeDetails() {
+    const chunk = cardChunks[state.chunk];
+    if (state.phraseScope === "work") {
+      return { start: 0, stop: sequence.data.length - 1, label: "the complete work" };
+    }
+    if (state.phraseScope === "book") {
+      const book = books.find((item) => item.id === chunk.book);
+      return { start: book.start, stop: book.stop, label: `Book ${book.id}` };
+    }
+    return { start: chunk.start, stop: chunk.stop, label: `Book ${chunk.book}, card ${chunk.card}` };
+  }
+
+  function lowerBound(items, value, key) {
+    let low = 0;
+    let high = items.length;
+    while (low < high) {
+      const middle = (low + high) >> 1;
+      if (items[middle][key] < value) low = middle + 1;
+      else high = middle;
+    }
+    return low;
+  }
+
+  function rankedPhrases() {
+    const scope = phraseScopeDetails();
+    const cacheKey = [state.phraseScope, scope.start, scope.stop, state.source, state.language].join(":");
+    if (phraseCache.has(cacheKey)) return phraseCache.get(cacheKey);
+
+    const tokens = sourceTokens.filter((token) => token.start >= scope.start && token.stop <= scope.stop);
+    const notes = [];
+    tracks.forEach((track) => {
+      if (!sourceMatches(track) || !languageMatches(track)) return;
+      track.notes.forEach((note) => {
+        if (overlaps(note.start, note.stop, scope.start, scope.stop)) notes.push({ track, note });
+      });
+    });
+    if (tokens.length < 3 || !notes.length) {
+      const result = { scope, phrases: [], passageCount: notes.length };
+      phraseCache.set(cacheKey, result);
+      return result;
+    }
+
+    const changes = new Int32Array(tokens.length + 1);
+    notes.forEach(({ note }) => {
+      const first = lowerBound(tokens, note.start, "start");
+      const afterLast = lowerBound(tokens, note.stop + 1, "stop");
+      if (first < afterLast) {
+        changes[first] += 1;
+        changes[afterLast] -= 1;
+      }
+    });
+    const coverage = new Uint32Array(tokens.length);
+    let running = 0;
+    for (let index = 0; index < tokens.length; index += 1) {
+      running += changes[index];
+      coverage[index] = running;
+    }
+
+    const candidates = [];
+    [3, 4, 5, 6, 8, 10, 12].forEach((length) => {
+      const strongest = [];
+      for (let start = 0; start + length <= tokens.length; start += 1) {
+        let support = Infinity;
+        for (let offset = 0; offset < length; offset += 1) {
+          support = Math.min(support, coverage[start + offset]);
+        }
+        if (!support) continue;
+        strongest.push({ start, length, support });
+        if (strongest.length > 96) {
+          strongest.sort((a, b) => b.support - a.support || b.length - a.length);
+          strongest.length = 48;
+        }
+      }
+      strongest.sort((a, b) => b.support - a.support || b.length - a.length);
+      candidates.push(...strongest.slice(0, 48));
+    });
+
+    const exact = candidates.map((candidate) => {
+      const first = tokens[candidate.start];
+      const last = tokens[candidate.start + candidate.length - 1];
+      const covering = notes.filter(({ note }) => note.start <= first.start && note.stop >= last.stop);
+      return {
+        start: first.start,
+        stop: last.stop,
+        text: displayGreek(sequence.data.slice(first.start, last.stop + 1)),
+        passages: covering.length,
+        sources: new Set(covering.map(({ track }) => track.id)).size,
+        citation: lineRangeForNote({ start: first.start, stop: last.stop })
+      };
+    }).filter((phrase) => phrase.passages > 0)
+      .sort((a, b) => b.passages - a.passages || (b.stop - b.start) - (a.stop - a.start));
+
+    const phrases = [];
+    exact.forEach((candidate) => {
+      const duplicate = phrases.some((accepted) => {
+        const intersection = Math.max(0, Math.min(candidate.stop, accepted.stop) - Math.max(candidate.start, accepted.start) + 1);
+        const shorter = Math.min(candidate.stop - candidate.start + 1, accepted.stop - accepted.start + 1);
+        return intersection / shorter >= 0.65;
+      });
+      if (!duplicate && phrases.length < 8) phrases.push(candidate);
+    });
+    const result = { scope, phrases, passageCount: notes.length };
+    phraseCache.set(cacheKey, result);
+    return result;
+  }
+
+  function renderPhrases() {
+    const result = rankedPhrases();
+    elements.phraseScope.value = state.phraseScope;
+    elements.phraseStatus.textContent = `Ranked by passages that contain the complete phrase in ${result.scope.label}; ${result.passageCount.toLocaleString()} filtered reuse passages considered.`;
+    if (!result.phrases.length) {
+      const empty = document.createElement("p");
+      empty.className = "phrase-empty";
+      empty.textContent = "No multiword quotation spans were found for this scope and filter.";
+      elements.phraseList.replaceChildren(empty);
+      return;
+    }
+    elements.phraseList.replaceChildren(...result.phrases.map((phrase) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "phrase-item";
+      if (state.phrase && state.phrase.start === phrase.start && state.phrase.stop === phrase.stop) button.classList.add("is-selected");
+      button.dataset.start = String(phrase.start);
+      button.dataset.stop = String(phrase.stop);
+      button.dataset.text = phrase.text;
+      const text = document.createElement("span");
+      text.className = "phrase-text";
+      text.lang = "grc";
+      text.textContent = phrase.text;
+      const meta = document.createElement("span");
+      meta.className = "phrase-meta";
+      meta.textContent = `${phrase.passages.toLocaleString()} passages · ${phrase.sources.toLocaleString()} sources · ${phrase.citation}`;
+      button.append(text, meta);
+      return button;
+    }));
   }
 
   function matchesForChunk(chunk) {
@@ -370,8 +519,9 @@
       const trackLanguageMatches = languageMatches(track);
       const sourceTypeMatches = sourceMatches(track);
       const wordMatches = !state.word || overlaps(note.start, note.stop, state.word.start, state.word.stop);
+      const phraseMatches = !state.phrase || (note.start <= state.phrase.start && note.stop >= state.phrase.stop);
       const queryMatches = !query || `${track.name} ${track.date}`.toLocaleLowerCase().includes(query);
-      return sourceTypeMatches && trackLanguageMatches && wordMatches && queryMatches;
+      return sourceTypeMatches && trackLanguageMatches && wordMatches && phraseMatches && queryMatches;
     });
   }
 
@@ -388,14 +538,15 @@
     quote.lang = "grc";
     quote.setAttribute("aria-label", "Matched Greek quotation");
 
+    const selection = state.phrase || state.word;
     const passage = sequence.data.slice(note.start, note.stop + 1);
-    if (!state.word || !overlaps(note.start, note.stop, state.word.start, state.word.stop)) {
+    if (!selection || !overlaps(note.start, note.stop, selection.start, selection.stop)) {
       quote.textContent = passage;
       return quote;
     }
 
-    const highlightStart = Math.max(note.start, state.word.start);
-    const highlightStop = Math.min(note.stop, state.word.stop);
+    const highlightStart = Math.max(note.start, selection.start);
+    const highlightStop = Math.min(note.stop, selection.stop);
     quote.append(document.createTextNode(sequence.data.slice(note.start, highlightStart)));
     const selected = document.createElement("mark");
     selected.textContent = sequence.data.slice(highlightStart, highlightStop + 1);
@@ -407,8 +558,10 @@
     const filtered = filteredMatches(matches);
     const visible = filtered.slice(0, state.limit);
     elements.visibleReuseCount.textContent = filtered.length.toLocaleString();
-    elements.wordSelection.hidden = !state.word;
-    if (state.word) {
+    elements.wordSelection.hidden = !state.word && !state.phrase;
+    if (state.phrase) {
+      elements.selectedWord.textContent = `Complete phrase: “${state.phrase.text}”`;
+    } else if (state.word) {
       elements.selectedWord.textContent = `“${state.word.text}” (line ${state.word.line})`;
     }
 
@@ -455,6 +608,8 @@
     if (state.language !== "all") params.set("lang", state.language);
     if (state.source !== "quotations") params.set("source", state.source);
     if (state.word) params.set("word", `${state.word.start}-${state.word.stop}`);
+    if (state.phrase) params.set("phrase", `${state.phrase.start}-${state.phrase.stop}`);
+    if (state.phraseScope !== "card") params.set("phraseScope", state.phraseScope);
     const suffix = params.toString();
     const passage = state.citation || cardChunks[state.chunk].id;
     history.replaceState(null, "", `${viewerBasePath()}:${passage}${suffix ? `&${suffix}` : ""}`);
@@ -478,6 +633,7 @@
     elements.previousChunk.disabled = state.chunk === 0;
     elements.nextChunk.disabled = state.chunk === cardChunks.length - 1;
     renderOverview();
+    renderPhrases();
     renderText(chunk, heatMatches);
     renderMatches(matches);
     updateRoute();
@@ -537,6 +693,8 @@
     const requestedLanguage = publicLanguage(params.get("lang"));
     const requestedSource = params.get("source");
     const requestedWord = params.get("word");
+    const requestedPhrase = params.get("phrase");
+    const requestedPhraseScope = params.get("phraseScope");
     const requestedChunk = requestedPassage ? chunkIndexForPassage(requestedPassage) : -1;
     if (requestedChunk >= 0) {
       state.chunk = requestedChunk;
@@ -553,6 +711,7 @@
       state.source = requestedSource;
       elements.sourceFilter.value = requestedSource;
     }
+    if (["work", "book", "card"].includes(requestedPhraseScope)) state.phraseScope = requestedPhraseScope;
     const wordBounds = requestedWord && requestedWord.match(/^(\d+)-(\d+)$/);
     if (wordBounds) {
       const start = Number(wordBounds[1]);
@@ -562,12 +721,22 @@
         state.word = { start, stop, text: displayGreek(sequence.data.slice(start, stop + 1)), line: line.id };
       }
     }
+    const phraseBounds = requestedPhrase && requestedPhrase.match(/^(\d+)-(\d+)$/);
+    if (phraseBounds) {
+      const start = Number(phraseBounds[1]);
+      const stop = Number(phraseBounds[2]);
+      if (start <= stop && stop < sequence.data.length) {
+        state.phrase = { start, stop, text: displayGreek(sequence.data.slice(start, stop + 1)) };
+        state.word = null;
+      }
+    }
   }
 
   elements.previousChunk.addEventListener("click", () => {
     state.chunk = Math.max(0, state.chunk - 1);
     state.citation = cardChunks[state.chunk].id;
     state.word = null;
+    state.phrase = null;
     state.limit = PAGE_SIZE;
     render();
     scrollTo({ top: document.querySelector(".chunk-nav").offsetTop - 12, behavior: "smooth" });
@@ -577,6 +746,7 @@
     state.chunk = Math.min(cardChunks.length - 1, state.chunk + 1);
     state.citation = cardChunks[state.chunk].id;
     state.word = null;
+    state.phrase = null;
     state.limit = PAGE_SIZE;
     render();
     scrollTo({ top: document.querySelector(".chunk-nav").offsetTop - 12, behavior: "smooth" });
@@ -586,18 +756,21 @@
     state.chunk = Number(event.target.value);
     state.citation = cardChunks[state.chunk].id;
     state.word = null;
+    state.phrase = null;
     state.limit = PAGE_SIZE;
     render();
   });
 
   elements.languageFilter.addEventListener("change", (event) => {
     state.language = event.target.value;
+    state.phrase = null;
     state.limit = PAGE_SIZE;
     render();
   });
 
   elements.sourceFilter.addEventListener("change", (event) => {
     state.source = event.target.value;
+    state.phrase = null;
     state.limit = PAGE_SIZE;
     render();
   });
@@ -622,6 +795,7 @@
     state.word = alreadySelected
       ? null
       : { start, stop, text: target.textContent, line: target.dataset.line };
+    state.phrase = null;
     if (state.word) state.citation = target.dataset.line;
     state.limit = PAGE_SIZE;
     render();
@@ -629,6 +803,7 @@
 
   elements.clearWord.addEventListener("click", () => {
     state.word = null;
+    state.phrase = null;
     state.limit = PAGE_SIZE;
     render();
   });
@@ -644,9 +819,35 @@
       state.chunk = nextChunk;
       state.citation = cardChunks[state.chunk].id;
       state.word = null;
+      state.phrase = null;
       state.limit = PAGE_SIZE;
       render();
     }
+  });
+
+  elements.phraseScope.addEventListener("change", (event) => {
+    state.phraseScope = event.target.value;
+    state.phrase = null;
+    state.word = null;
+    state.limit = PAGE_SIZE;
+    render();
+  });
+
+  elements.phraseList.addEventListener("click", (event) => {
+    const target = event.target.closest(".phrase-item");
+    if (!target) return;
+    const start = Number(target.dataset.start);
+    const stop = Number(target.dataset.stop);
+    const nextChunk = cardChunks.findIndex((chunk) => start >= chunk.start && start <= chunk.stop);
+    if (nextChunk >= 0) {
+      state.chunk = nextChunk;
+      state.citation = cardChunks[nextChunk].id;
+    }
+    state.word = null;
+    state.phrase = { start, stop, text: target.dataset.text };
+    state.limit = PAGE_SIZE;
+    render();
+    document.querySelector(".workspace").scrollIntoView({ behavior: "smooth", block: "start" });
   });
 
   elements.copyCitation.addEventListener("click", async () => {
