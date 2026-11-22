@@ -122,7 +122,13 @@ def render_index(author_id, work_id, author_name, genre, title, chunks, lines):
 </head>
 <body>
   <header class="site-header">
-    <div class="brand"><span class="brand-mark" aria-hidden="true">Π</span><span>Perseus Text Reuse</span></div>
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">Π</span>
+      <span class="brand-copy">
+        <span>Perseus Text Reuse</span>
+        <span class="brand-context">Open Greek and Latin in the Harvard ID1 Million Book Library</span>
+      </span>
+    </div>
     <div class="header-meta">
       <a href="https://github.com/gregorycrane/idi-greek" rel="noreferrer">Data repository</a>
       <span aria-hidden="true">·</span>
