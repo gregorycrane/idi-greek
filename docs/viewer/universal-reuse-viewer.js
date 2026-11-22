@@ -557,17 +557,28 @@
     }
 
     const bandHeight = 21;
-    cardChunks.forEach((chunk, index) => {
-      const bounds = chunkBounds(chunk);
-      const left = bounds.start / textLength * width;
-      const right = (bounds.stop + 1) / textLength * width;
+    const structureLabel = `${structure[0].id || ""} ${structure[0].name || ""}`.toLocaleLowerCase();
+    const hasBookDivisions = /\bbooks?\b/u.test(structureLabel) && topUnits.length > 1;
+    const overviewBands = hasBookDivisions
+      ? topUnits.map((book) => ({
+        label: String(book.name || book.id),
+        start: book.start,
+        stop: book.stop
+      }))
+      : cardChunks.map((chunk) => ({
+        label: chunk.label,
+        ...chunkBounds(chunk)
+      }));
+    overviewBands.forEach((band, index) => {
+      const left = band.start / textLength * width;
+      const right = (band.stop + 1) / textLength * width;
       context.fillStyle = index % 2 ? "#dce5e9" : "#c7d7dc";
       context.fillRect(left, 0, Math.max(1, right - left), bandHeight);
       if (right - left > 34) {
         context.fillStyle = "#40515d";
         context.font = "700 10px system-ui";
         context.textAlign = "center";
-        context.fillText(chunk.label, (left + right) / 2, 14);
+        context.fillText(band.label, (left + right) / 2, 14);
       }
     });
 
