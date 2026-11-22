@@ -1,1 +1,23 @@
-<h1>Hello, World!</h1>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Browse Greek works with detected text reuse in the Harvard ID1 Million Book Library.">
+  <title>Perseus Text Reuse — All Works</title>
+  <link rel="stylesheet" href="home.css?v=universal-1">
+  <script src="home.js?v=universal-1" defer></script>
+</head>
+<body>
+  <header class="site-header"><div class="brand"><span class="brand-mark" aria-hidden="true">Π</span><span><strong>Perseus Text Reuse</strong><small>Open Greek and Latin in the Harvard ID1 Million Book Library</small></span></div><a href="https://github.com/gregorycrane/idi-greek">Data repository</a></header>
+  <main>
+    <section class="hero"><p class="eyebrow">Institutional Books 1.0</p><h1>Greek works in the reuse corpus</h1><p>Explore quotation density, word-level heatmaps, the most quoted phrases, and the books that reuse each passage.</p><dl><div><dt>Works</dt><dd id="work-count">—</dd></div><div><dt>Works with Perseus cards</dt><dd id="card-count">—</dd></div></dl></section>
+    <section class="catalog" aria-labelledby="catalog-title">
+      <div class="catalog-heading"><div><p class="eyebrow">Browse the corpus</p><h2 id="catalog-title">All works</h2></div><p id="result-count" aria-live="polite"></p></div>
+      <div class="catalog-controls"><label><span>Find a work</span><input id="work-search" type="search" placeholder="Author, title, or CTS URN"></label><label><span>Chunking</span><select id="chunk-filter"><option value="all">All works</option><option value="cards">Perseus cards available</option><option value="cts">CTS structure</option></select></label></div>
+      <div class="work-list" id="work-list"></div><button class="show-more" id="show-more" type="button" hidden>Show more works</button>
+    </section>
+  </main>
+  <footer>Text-reuse alignments link to source pages in HathiTrust. Passage identifiers use CTS URNs.</footer>
+</body>
+</html>

@@ -9,27 +9,24 @@
   <p>Opening the requested CTS passage…</p>
   <script>
     (function () {
-      const ctsRoute = location.pathname.match(/^(.*\/quotes\/)urn:cts:greekLit:(tlg\d{4})\.(tlg\d+)(?:\.[^:&/]+)?:([^&/]+)(?:&(.*))?$/);
-      const shortRoute = location.pathname.match(/^(.*\/quotes\/(tlg\d{4})\/)(tlg\d+)\.([^&/]+)(?:&(.*))?$/);
+      const ctsRoute = location.pathname.match(/^(.*\/quotes\/)urn:cts:greekLit:([^./:&]+)\.([^.:&/]+)(?:\.[^:&/]+)?(?::([^&/]+))?(?:&(.*))?$/);
+      const shortRoute = location.pathname.match(/^(.*\/quotes\/([^/]+)\/)([^.&/]+)(?:\.([^&/]+))?(?:&(.*))?$/);
       const route = ctsRoute || shortRoute;
       if (!route) {
         document.body.textContent = "The requested page was not found.";
         return;
       }
 
-      const prefix = ctsRoute ? route[1] : route[1].replace(/tlg\d{4}\/$/, "");
+      const quotesPrefix = ctsRoute ? route[1] : route[1].replace(/[^/]+\/$/, "");
+      const siteRoot = quotesPrefix.replace(/quotes\/$/, "");
       const author = route[2];
       const work = route[3];
-      const passage = route[4];
+      const passage = route[4] || "";
       const query = route[5] || "";
-
-      sessionStorage.setItem("idi-greek-route", JSON.stringify({
-        author,
-        work,
-        passage: decodeURIComponent(passage),
-        query
-      }));
-      location.replace(`${prefix}${author}/${work}/?v=cts-urn`);
+      const params = new URLSearchParams(query);
+      params.set("work", `${author}.${work}`);
+      if (passage) params.set("passage", decodeURIComponent(passage));
+      location.replace(`${siteRoot}viewer/?${params.toString()}`);
     }());
   </script>
 </body>

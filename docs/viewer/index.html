@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Explore Greek text reuse in the Harvard ID1 Million Book Library.">
+  <title>Perseus Text Reuse Viewer</title>
+  <link rel="stylesheet" href="universal-reuse-viewer.css?v=universal-1">
+  <script src="loader.js?v=universal-1" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="../">
+      <span class="brand-mark" aria-hidden="true">Π</span>
+      <span class="brand-copy"><span>Perseus Text Reuse</span><span class="brand-context">Open Greek and Latin in the Harvard ID1 Million Book Library</span></span>
+    </a>
+    <div class="header-meta"><a href="../">All works</a><span aria-hidden="true">·</span><a href="https://github.com/gregorycrane/idi-greek" rel="noreferrer">Data repository</a><span aria-hidden="true">·</span><a id="tei-source" href="#" rel="noreferrer">TEI source</a></div>
+  </header>
+
+  <div class="loading-state" id="loading-state" role="status">Loading work and reuse data…</div>
+  <main id="viewer-main" hidden>
+    <section class="work-heading" aria-labelledby="work-title">
+      <div><p class="eyebrow" id="work-context">Greek literature</p><h1 id="work-title">Text reuse</h1><p class="urn" id="work-urn"></p></div>
+      <dl class="work-stats" aria-label="Work statistics">
+        <div><dt>Default view</dt><dd id="default-view">Passage</dd></div>
+        <div><dt id="chunk-count-label">Passages</dt><dd id="scene-count">—</dd></div>
+        <div><dt>Reuse passages</dt><dd id="total-reuse-count">—</dd></div>
+      </dl>
+    </section>
+
+    <nav class="chunk-nav" aria-label="Passage navigation">
+      <button class="nav-button" id="previous-chunk" type="button">Previous passage</button>
+      <label class="chunk-picker"><span>Passage</span><select id="chunk-select" aria-label="Choose a passage"></select></label>
+      <button class="nav-button" id="next-chunk" type="button">Next passage</button>
+    </nav>
+
+    <section class="overview-panel" aria-labelledby="overview-title">
+      <div class="overview-heading"><div><p class="eyebrow">Whole-work distribution</p><h2 id="overview-title">Reuse overview</h2></div><p><span id="overview-language">All languages</span> · select a region to move between passages</p></div>
+      <canvas id="reuse-overview" height="112" aria-label="Reuse density across the complete work"></canvas>
+      <div class="overview-scale" aria-hidden="true"><span>Start</span><strong id="overview-selection">Current passage</strong><span>End</span></div>
+    </section>
+
+    <section class="phrase-panel" aria-labelledby="phrase-title">
+      <div class="phrase-heading"><div><p class="eyebrow">Ranked reuse spans</p><h2 id="phrase-title">Most quoted phrases</h2></div><label class="phrase-scope"><span>Scope</span><select id="phrase-scope"></select></label></div>
+      <p class="phrase-status" id="phrase-status"></p><div class="phrase-list" id="phrase-list" aria-live="polite"></div>
+    </section>
+
+    <section class="workspace">
+      <article class="text-panel" aria-labelledby="chunk-title">
+        <div class="panel-heading"><div><p class="eyebrow" id="chunk-kind">Passage</p><h2 id="chunk-title">Text</h2></div><div class="passage-actions"><button class="quiet-button" id="copy-citation" type="button">Copy citation</button></div></div>
+        <p class="chunk-summary" id="chunk-summary" aria-live="polite"></p>
+        <div class="legend" aria-label="Word-level reuse heatmap legend"><strong>Word-level heatmap</strong><span><i class="word-swatch heat-0"></i>No match</span><span><i class="word-swatch heat-1"></i>Some reuse</span><span><i class="word-swatch heat-4"></i>Frequent reuse</span><em>Select a word to inspect its passages.</em></div>
+        <ol class="greek-text" id="greek-text" aria-label="Greek text"></ol>
+      </article>
+      <aside class="reuse-panel" aria-labelledby="reuse-title">
+        <div class="panel-heading compact"><div><p class="eyebrow">Institutional Books 1.0</p><h2 id="reuse-title">Text reuse</h2></div><span class="count-badge" id="visible-reuse-count">0</span></div>
+        <div class="filters">
+          <label><span>Source type</span><select id="source-filter"><option value="quotations" selected>Exclude editions</option><option value="all">All books</option><option value="editions">Editions only</option></select></label>
+          <label><span>Language</span><select id="language-filter"></select></label>
+          <label><span>Sort quotations</span><select id="quotation-sort"><option value="text" selected>Text order</option><option value="oldest">Publication date: oldest</option><option value="newest">Publication date: newest</option></select></label>
+          <label><span>Find a book</span><input id="book-filter" type="search" placeholder="Title or date"></label>
+        </div>
+        <div class="word-selection" id="word-selection" hidden><span>Passages quoting <strong id="selected-word"></strong></span><button id="clear-word" type="button">Show whole passage</button></div>
+        <div class="reuse-list" id="reuse-list" aria-live="polite"></div><button class="show-more" id="show-more" type="button" hidden>Show more matches</button>
+      </aside>
+    </section>
+  </main>
+  <footer><p id="viewer-note">Navigation follows the work’s CTS citation structure. Canonical Perseus cards are used when available.</p></footer>
+</body>
+</html>
