@@ -233,11 +233,12 @@ def top_phrases(work, work_dir: Path, text: str, tokens, notes, phrase_length: i
     return accepted
 
 
-def ranked_items(items, relative=False):
+def ranked_items(items, relative=False, limit=RANK_LIMIT):
     key = (lambda item: (-item["quotesPerThousandWords"], -item["quotationCount"], item["title"])) if relative else (
         lambda item: (-item["quotationCount"], -item["quotesPerThousandWords"], item["title"])
     )
-    return sorted(items, key=key)[:RANK_LIMIT]
+    ranked = sorted(items, key=key)
+    return ranked if limit is None else ranked[:limit]
 
 
 def quotation_tracks(work, text_length: int):
@@ -391,12 +392,12 @@ def main():
                 "excludedEditionBooks": totals["editionBooks"],
                 "excludedEditionPassages": totals["editionPassages"],
             },
-            "worksAbsolute": ranked_items(work_stats[key]),
-            "worksRelative": ranked_items([item for item in work_stats[key] if item["wordCount"] >= RELATIVE_WORK_MIN_WORDS], relative=True),
+            "worksAbsolute": ranked_items(work_stats[key], limit=None),
+            "worksRelative": ranked_items([item for item in work_stats[key] if item["wordCount"] >= RELATIVE_WORK_MIN_WORDS], relative=True, limit=None),
             "worksRelativeWithoutNewTestament": ranked_items([
                 item for item in work_stats[key]
                 if item["wordCount"] >= RELATIVE_WORK_MIN_WORDS and item["author"] != NEW_TESTAMENT_AUTHOR
-            ], relative=True),
+            ], relative=True, limit=None),
             "authorsAbsolute": sorted(authors, key=lambda item: (-item["quotationCount"], -item["quotesPerThousandWords"], item["author"]))[:RANK_LIMIT],
             "authorsRelative": sorted((item for item in authors if item["wordCount"] >= RELATIVE_AUTHOR_MIN_WORDS), key=lambda item: (-item["quotesPerThousandWords"], -item["quotationCount"], item["author"]))[:RANK_LIMIT],
             "authorsRelativeWithoutNewTestament": sorted((

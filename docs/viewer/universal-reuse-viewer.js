@@ -186,6 +186,7 @@
     clearWord: document.querySelector("#clear-word"),
     copyCitation: document.querySelector("#copy-citation"),
     greekText: document.querySelector("#greek-text"),
+    hierarchyNavigation: document.querySelector("#hierarchy-navigation"),
     languageFilter: document.querySelector("#language-filter"),
     levelPicker: document.querySelector("#level-picker"),
     nextChunk: document.querySelector("#next-chunk"),
@@ -846,7 +847,8 @@
   function updateRoute() {
     const params = new URLSearchParams();
     params.set("work", `${AUTHOR_ID}.${WORK_ID}`);
-    params.set("passage", state.citation || cardChunks[state.chunk].lines[0].id);
+    const passage = state.citation || cardChunks[state.chunk].lines[0].id;
+    params.set("passage", passage);
     if (state.language !== "all") params.set("lang", state.language);
     if (state.source !== "quotations") params.set("source", state.source);
     if (state.sort !== "text") params.set("sort", state.sort);
@@ -858,6 +860,16 @@
       params.set("view", hierarchyTerms[selectedChunkLevel]);
     }
     history.replaceState(null, "", `${location.pathname}?${params.toString()}`);
+    if (config.multitextBase) {
+      const multitextUrl = new URL(config.multitextBase);
+      multitextUrl.searchParams.set("w", `${AUTHOR_ID}.${WORK_ID}:${passage}`);
+      const multitextLink = document.querySelector("#multitext-link");
+      const shellWorkName = document.querySelector("#shell-work-name");
+      if (multitextLink) multitextLink.href = multitextUrl.href;
+      if (shellWorkName) shellWorkName.href = multitextUrl.href;
+      const shellUrn = document.querySelector("#shell-work-urn");
+      if (shellUrn) shellUrn.textContent = `${BASE_URN}:${passage}`;
+    }
   }
 
   function render() {
@@ -878,6 +890,7 @@
       .toLocaleString();
     elements.previousChunk.disabled = state.chunk === 0;
     elements.nextChunk.disabled = state.chunk === cardChunks.length - 1;
+    renderHierarchyNavigation();
     renderOverview();
     renderPhrases();
     renderText(chunk, heatMatches);
@@ -904,6 +917,71 @@
 
     elements.previousChunk.textContent = `Previous ${CHUNK_TERM}`;
     elements.nextChunk.textContent = `Next ${CHUNK_TERM}`;
+    renderHierarchyNavigation();
+  }
+
+  function activeHierarchyNodes(chunk) {
+    return hierarchyLevels.map((level) => level.find((node) => overlaps(node.start, node.stop, chunk.start, chunk.start)) || null);
+  }
+
+  function hierarchyNodesForRow(level, activeNodes) {
+    if (level === 0) return hierarchyLevels[0];
+    const parent = activeNodes[level - 1];
+    if (!parent) return [];
+    return hierarchyLevels[level].filter((node) => {
+      const ancestor = node.ancestors[level - 1];
+      return ancestor && String(ancestor.id) === String(parent.id);
+    });
+  }
+
+  function navigateHierarchy(level, node) {
+    setChunkLevel(level, node.id);
+    state.citation = String(node.id);
+    state.word = null;
+    state.phrase = null;
+    state.limit = PAGE_SIZE;
+    render();
+    scrollTo({ top: document.querySelector("#passage-navigation").offsetTop - 12, behavior: "smooth" });
+  }
+
+  function renderHierarchyNavigation() {
+    if (!elements.hierarchyNavigation) return;
+    const legacy = document.querySelector("#legacy-chunk-navigation");
+    if (!hasProseHierarchy) {
+      elements.hierarchyNavigation.hidden = true;
+      if (legacy) legacy.hidden = false;
+      return;
+    }
+    if (legacy) legacy.hidden = true;
+    elements.hierarchyNavigation.hidden = false;
+    const chunk = cardChunks[state.chunk] || cardChunks[0];
+    if (!chunk) return;
+    const activeNodes = activeHierarchyNodes(chunk);
+    elements.hierarchyNavigation.replaceChildren(...hierarchyLevels.map((_, level) => {
+      const row = document.createElement("div");
+      row.className = "hierarchy-row";
+      const label = document.createElement("span");
+      label.className = "hierarchy-label";
+      const navigationTerm = hierarchyTerms[level] === "subsection" ? "section" : hierarchyTerms[level];
+      label.textContent = `${titleCase(navigationTerm)}s:`;
+      const items = document.createElement("div");
+      items.className = "hierarchy-items";
+      hierarchyNodesForRow(level, activeNodes).forEach((node) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "hierarchy-pill";
+        button.textContent = String(node.name || node.id);
+        button.title = `${titleCase(navigationTerm)} ${node.id}`;
+        if (level <= selectedChunkLevel && activeNodes[level] && String(node.id) === String(activeNodes[level].id)) {
+          button.classList.add("current");
+          button.setAttribute("aria-current", level === selectedChunkLevel ? "page" : "true");
+        }
+        button.addEventListener("click", () => navigateHierarchy(level, node));
+        items.append(button);
+      });
+      row.append(label, items);
+      return row;
+    }));
   }
 
   function populatePhraseScopes() {

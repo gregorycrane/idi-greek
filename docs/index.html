@@ -5,19 +5,31 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Browse Greek works with detected text reuse in the Harvard ID1 Million Book Library.">
   <title>Perseus Text Reuse — All Works</title>
-  <link rel="stylesheet" href="home.css?v=statistics-2">
-  <script src="home.js?v=relative-filter-1" defer></script>
+  <link rel="stylesheet" href="assets/perseus-navigation.css?v=2">
+  <link rel="stylesheet" href="home.css?v=perseus-branding-1">
+  <script src="assets/perseus-navigation.js?v=2"></script>
+  <script src="home-navigation.js?v=perseus-branding-1" defer></script>
+  <script src="home.js?v=ranked-works-pagination-1" defer></script>
 </head>
 <body>
-  <header class="site-header">
-    <div class="brand-lockup">
-      <a class="brand-mark-link" href="./" aria-label="Perseus Text Reuse home"><img class="brand-mark" src="assets/perseus-running-man.png" alt=""></a>
-      <div class="brand-copy">
-        <a class="brand-title" href="./">Perseus Text Reuse</a>
-        <p>Open Greek and Latin in the <a href="https://institutional.org/institutional-books/" rel="noreferrer">Harvard Institutional Books 1.0 Million Book Library</a> <span class="powered-by">(powered by <a href="https://github.com/dasmiq/passim" rel="noreferrer">Passim</a>)</span></p>
+  <header class="perseus-shell">
+    <div class="perseus-banner">
+      <div class="perseus-brand">
+        <a class="perseus-mark" href="./" aria-label="Perseus Text Reuse home"><img src="assets/perseus-running-man.png" alt=""></a>
+        <div class="perseus-brand-copy">
+          <h1><a href="./">Perseus Text Reuse</a></h1>
+          <p class="perseus-brand-subtitle">Open Greek and Latin in the <a href="https://institutional.org/institutional-books/" rel="noreferrer">Harvard Institutional Books 1.0 Million Book Library</a> (powered by <a href="https://github.com/dasmiq/passim" rel="noreferrer">Passim</a>)</p>
+        </div>
       </div>
+      <nav class="perseus-actions" aria-label="Perseus tools">
+        <a class="perseus-action is-active" href="./">Text Reuse</a>
+        <a class="perseus-action" href="https://gregorycrane.github.io/persverscomp/">Multitext Viewer</a>
+        <a class="perseus-action" href="https://gregorycrane.github.io/persverscomp/word-dashboard.html">Explore Greek Words</a>
+        <a class="perseus-action" href="https://gregorycrane.github.io/persverscomp/lexicon-browser.html">Browse Lexica</a>
+        <a class="perseus-action" href="https://github.com/gregorycrane/idi-greek" rel="noreferrer">Data repository</a>
+      </nav>
     </div>
-    <nav class="header-meta" aria-label="Project links"><a href="https://github.com/gregorycrane/idi-greek" rel="noreferrer">Data repository</a></nav>
+    <div id="home-browse-navigation"></div>
   </header>
   <main>
     <section class="hero"><p class="eyebrow">Institutional Books 1.0</p><h1>Greek works in the reuse corpus</h1><p>Explore quotation density, word-level heatmaps, the most quoted phrases, and the books that reuse each passage.</p><dl><div><dt>Works</dt><dd id="work-count">—</dd></div><div><dt>Words</dt><dd id="word-count">—</dd></div><div><dt id="quotation-label">Greek quotations (5+ words)</dt><dd id="quotation-count">—</dd></div><div><dt>Unique quoting books</dt><dd id="book-count">—</dd></div></dl></section>
@@ -25,8 +37,8 @@
       <div class="statistics-heading"><div><p class="eyebrow">Corpus statistics</p><h2 id="statistics-title">What the library quotes</h2></div><div class="statistics-controls"><label for="statistics-match-mode">Match sensitivity</label><select id="statistics-match-mode"><option value="5">Higher precision (5 words)</option><option value="3">Higher recall (3 words)</option></select><label class="relative-exclusion"><input id="exclude-new-testament" type="checkbox"><span>Exclude New Testament works from relative rankings</span></label><p id="statistics-note">Loading corpus rankings…</p></div></div>
       <div class="metric-grid" aria-label="Quotation coverage"><article><span>Quoted-word occurrences</span><strong id="quoted-word-occurrences">—</strong><small id="quoted-word-note">Words counted once for every qualifying 5+ word Greek quotation</small></article><article><span>Distinct source words quoted</span><strong id="distinct-quoted-words">—</strong><small>Word positions touched by at least one qualifying quotation</small></article><article><span>Authors</span><strong id="author-count">—</strong><small>Authors represented by works in the corpus</small></article><article><span>Works with Perseus cards</span><strong id="card-count">—</strong><small>Poetry chunks using canonical card breaks</small></article></div>
       <div class="ranking-grid">
-        <article class="ranking-panel"><h3>Most quoted works</h3><p id="works-absolute-note">Greek quotation passages containing 5+ words</p><ol id="works-absolute"></ol></article>
-        <article class="ranking-panel"><h3>Most quoted works, relative</h3><p id="works-relative-note">5+ word Greek quotations per 1,000 source words · works with 1,000+ words</p><ol id="works-relative"></ol></article>
+        <article class="ranking-panel"><h3>Most quoted works</h3><p id="works-absolute-note">Greek quotation passages containing 5+ words</p><ol id="works-absolute"></ol><button class="ranking-more" id="works-absolute-more" type="button" aria-controls="works-absolute" hidden>Show 15 more works</button></article>
+        <article class="ranking-panel"><h3>Most quoted works, relative</h3><p id="works-relative-note">5+ word Greek quotations per 1,000 source words · works with 1,000+ words</p><ol id="works-relative"></ol><button class="ranking-more" id="works-relative-more" type="button" aria-controls="works-relative" hidden>Show 15 more works</button></article>
         <article class="ranking-panel"><h3>Most quoted authors</h3><p id="authors-absolute-note">Greek quotation passages containing 5+ words</p><ol id="authors-absolute"></ol></article>
         <article class="ranking-panel"><h3>Most quoted authors, relative</h3><p id="authors-relative-note">5+ word Greek quotations per 1,000 source words · authors with 5,000+ words</p><ol id="authors-relative"></ol></article>
       </div>

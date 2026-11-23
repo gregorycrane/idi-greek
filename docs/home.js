@@ -1,7 +1,17 @@
 (function () {
   "use strict";
   const PAGE_SIZE = 120;
-  const state = { works: [], query: "", filter: "all", limit: PAGE_SIZE, statistics: null, matchMode: "5", excludeNewTestament: false };
+  const RANK_PAGE_SIZE = 15;
+  const state = {
+    works: [],
+    query: "",
+    filter: "all",
+    limit: PAGE_SIZE,
+    statistics: null,
+    matchMode: "5",
+    excludeNewTestament: false,
+    rankingLimits: { worksAbsolute: RANK_PAGE_SIZE, worksRelative: RANK_PAGE_SIZE }
+  };
   const list = document.querySelector("#work-list");
   const resultCount = document.querySelector("#result-count");
   const showMore = document.querySelector("#show-more");
@@ -15,9 +25,15 @@
     return link;
   }
 
-  function renderWorkRanking(selector, works, relative) {
+  function resetWorkRankingLimits() {
+    state.rankingLimits.worksAbsolute = RANK_PAGE_SIZE;
+    state.rankingLimits.worksRelative = RANK_PAGE_SIZE;
+  }
+
+  function renderWorkRanking(selector, works, relative, limitKey, buttonSelector) {
     const listElement = document.querySelector(selector);
-    listElement.replaceChildren(...works.map((work) => {
+    const limit = state.rankingLimits[limitKey];
+    listElement.replaceChildren(...works.slice(0, limit).map((work) => {
       const item = document.createElement("li");
       const label = document.createElement("span");
       label.append(workLink(work, work.title));
@@ -30,6 +46,10 @@
       item.append(label, value);
       return item;
     }));
+    const button = document.querySelector(buttonSelector);
+    const remaining = Math.max(0, works.length - limit);
+    button.hidden = remaining === 0;
+    if (remaining) button.textContent = `Show ${Math.min(RANK_PAGE_SIZE, remaining)} more works`;
   }
 
   function renderAuthorRanking(selector, authors, relative) {
@@ -70,8 +90,8 @@
     document.querySelector("#authors-relative-note").textContent = `${words}+ word Greek quotations per 1,000 source words · authors with 5,000+ words${relativeSuffix}`;
     document.querySelector("#phrases-title").textContent = `Most quoted Greek ${words}-grams`;
     document.querySelector("#phrases-note").textContent = `Passages containing the complete ${words}-word phrase`;
-    renderWorkRanking("#works-absolute", mode.worksAbsolute, false);
-    renderWorkRanking("#works-relative", state.excludeNewTestament ? mode.worksRelativeWithoutNewTestament : mode.worksRelative, true);
+    renderWorkRanking("#works-absolute", mode.worksAbsolute, false, "worksAbsolute", "#works-absolute-more");
+    renderWorkRanking("#works-relative", state.excludeNewTestament ? mode.worksRelativeWithoutNewTestament : mode.worksRelative, true, "worksRelative", "#works-relative-more");
     renderAuthorRanking("#authors-absolute", mode.authorsAbsolute, false);
     renderAuthorRanking("#authors-relative", state.excludeNewTestament ? mode.authorsRelativeWithoutNewTestament : mode.authorsRelative, true);
 
@@ -144,11 +164,19 @@
   document.querySelector("#chunk-filter").addEventListener("change", (event) => { state.filter = event.target.value; state.limit = PAGE_SIZE; render(); });
   document.querySelector("#statistics-match-mode").addEventListener("change", (event) => {
     state.matchMode = event.target.value;
+    resetWorkRankingLimits();
     if (state.statistics) renderStatistics(state.statistics);
   });
   document.querySelector("#exclude-new-testament").addEventListener("change", (event) => {
     state.excludeNewTestament = event.target.checked;
+    resetWorkRankingLimits();
     if (state.statistics) renderStatistics(state.statistics);
+  });
+  [["#works-absolute-more", "worksAbsolute"], ["#works-relative-more", "worksRelative"]].forEach(([selector, key]) => {
+    document.querySelector(selector).addEventListener("click", () => {
+      state.rankingLimits[key] += RANK_PAGE_SIZE;
+      if (state.statistics) renderStatistics(state.statistics);
+    });
   });
   showMore.addEventListener("click", () => { state.limit += PAGE_SIZE; render(); });
 }());

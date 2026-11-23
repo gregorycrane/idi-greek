@@ -35,6 +35,12 @@
     return value.charAt(0).toUpperCase() + value.slice(1);
   }
 
+  function multitextUrl(parameters = {}) {
+    const url = new URL("https://gregorycrane.github.io/persverscomp/");
+    Object.entries(parameters).forEach(([key, value]) => url.searchParams.set(key, value));
+    return url.href;
+  }
+
   async function start() {
     const params = new URLSearchParams(location.search);
     const requested = params.get("work");
@@ -48,6 +54,33 @@
     document.querySelector("#work-title").textContent = work.title;
     document.querySelector("#work-context").textContent = work.author;
     document.querySelector("#work-urn").textContent = work.urn;
+    document.querySelector("#shell-work-name").textContent = work.name;
+    document.querySelector("#shell-work-urn").textContent = work.urn;
+    const multitextLink = document.querySelector("#multitext-link");
+    multitextLink.href = multitextUrl({ w: work.id });
+    document.querySelector("#shell-work-name").href = multitextLink.href;
+    const browseLinks = [
+      { label: "Languages", href: multitextUrl({ home: "languages" }) },
+      { label: "Greek", href: multitextUrl({ language: "greek" }) },
+      {
+        label: "Fragments",
+        href: work.authorId === "tlg0011"
+          ? multitextUrl({ author: "tlg0011", scope: "fragments" })
+          : multitextUrl({ collection: "aeschylus-fragments" })
+      },
+      { label: `All works of ${work.author}`, href: multitextUrl({ author: work.authorId }) },
+      { label: "Tragedy", href: multitextUrl({ genre: "tragedy", language: "greek" }) },
+      { label: "All works", href: multitextUrl({ browse: "all" }) }
+    ];
+    const browseNavigation = PerseusNavigation.renderBrowseNavigation({
+      mount: "#reuse-browse-navigation",
+      links: browseLinks
+    });
+    PerseusNavigation.initCollapsibleNavigation({
+      button: "#toggle-navigation",
+      targets: [browseNavigation, "#reuse-work-context", "#passage-navigation"],
+      storageKey: "perseus-text-reuse-navigation-hidden"
+    });
     const catalogChunkTerm = work.chunkTerm || (work.hasCards ? "card" : "passage");
     document.querySelector("#default-view").textContent = titleCase(catalogChunkTerm);
     document.querySelector("#chunk-count-label").textContent = `${titleCase(catalogChunkTerm)}s`;
@@ -69,11 +102,13 @@
       trackVariables: work.trackFiles.map((file) => file.replace(/\.js$/, "")),
       chunkTerm: work.chunkTerm,
       parentTerm: work.parentTerm,
-      unitTerm: work.unitTerm
+      unitTerm: work.unitTerm,
+      multitextBase: multitextUrl({ w: work.id })
     };
     main.hidden = false;
+    document.querySelector("#passage-navigation").hidden = false;
     loading.remove();
-    await loadScript("universal-reuse-viewer.js?v=hierarchy-scopes-2");
+    await loadScript("universal-reuse-viewer.js?v=hierarchy-navigation-1");
   }
 
   start().catch((error) => {
