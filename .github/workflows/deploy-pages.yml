@@ -39,7 +39,7 @@ jobs:
       - name: Assemble the Pages artifact
         run: |
           mkdir -p _site
-          cp docs/404.html docs/index.html docs/home.css docs/home.js docs/catalog.json _site/
+          cp docs/404.html docs/index.html docs/home.css docs/home.js docs/catalog.json docs/statistics.json _site/
           cp -R docs/assets docs/viewer _site/
           touch _site/.nojekyll
 
