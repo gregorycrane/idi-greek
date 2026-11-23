@@ -32,6 +32,7 @@ jobs:
             docs/home.css
             docs/home.js
             docs/catalog.json
+            docs/statistics.json
             docs/assets
             docs/viewer
 

@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Browse Greek works with detected text reuse in the Harvard ID1 Million Book Library.">
   <title>Perseus Text Reuse — All Works</title>
-  <link rel="stylesheet" href="home.css?v=perseus-1">
-  <script src="home.js?v=universal-1" defer></script>
+  <link rel="stylesheet" href="home.css?v=statistics-2">
+  <script src="home.js?v=relative-filter-1" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -20,7 +20,19 @@
     <nav class="header-meta" aria-label="Project links"><a href="https://github.com/gregorycrane/idi-greek" rel="noreferrer">Data repository</a></nav>
   </header>
   <main>
-    <section class="hero"><p class="eyebrow">Institutional Books 1.0</p><h1>Greek works in the reuse corpus</h1><p>Explore quotation density, word-level heatmaps, the most quoted phrases, and the books that reuse each passage.</p><dl><div><dt>Works</dt><dd id="work-count">—</dd></div><div><dt>Works with Perseus cards</dt><dd id="card-count">—</dd></div></dl></section>
+    <section class="hero"><p class="eyebrow">Institutional Books 1.0</p><h1>Greek works in the reuse corpus</h1><p>Explore quotation density, word-level heatmaps, the most quoted phrases, and the books that reuse each passage.</p><dl><div><dt>Works</dt><dd id="work-count">—</dd></div><div><dt>Words</dt><dd id="word-count">—</dd></div><div><dt id="quotation-label">Greek quotations (5+ words)</dt><dd id="quotation-count">—</dd></div><div><dt>Unique quoting books</dt><dd id="book-count">—</dd></div></dl></section>
+    <section class="statistics" aria-labelledby="statistics-title">
+      <div class="statistics-heading"><div><p class="eyebrow">Corpus statistics</p><h2 id="statistics-title">What the library quotes</h2></div><div class="statistics-controls"><label for="statistics-match-mode">Match sensitivity</label><select id="statistics-match-mode"><option value="5">Higher precision (5 words)</option><option value="3">Higher recall (3 words)</option></select><label class="relative-exclusion"><input id="exclude-new-testament" type="checkbox"><span>Exclude New Testament works from relative rankings</span></label><p id="statistics-note">Loading corpus rankings…</p></div></div>
+      <div class="metric-grid" aria-label="Quotation coverage"><article><span>Quoted-word occurrences</span><strong id="quoted-word-occurrences">—</strong><small id="quoted-word-note">Words counted once for every qualifying 5+ word Greek quotation</small></article><article><span>Distinct source words quoted</span><strong id="distinct-quoted-words">—</strong><small>Word positions touched by at least one qualifying quotation</small></article><article><span>Authors</span><strong id="author-count">—</strong><small>Authors represented by works in the corpus</small></article><article><span>Works with Perseus cards</span><strong id="card-count">—</strong><small>Poetry chunks using canonical card breaks</small></article></div>
+      <div class="ranking-grid">
+        <article class="ranking-panel"><h3>Most quoted works</h3><p id="works-absolute-note">Greek quotation passages containing 5+ words</p><ol id="works-absolute"></ol></article>
+        <article class="ranking-panel"><h3>Most quoted works, relative</h3><p id="works-relative-note">5+ word Greek quotations per 1,000 source words · works with 1,000+ words</p><ol id="works-relative"></ol></article>
+        <article class="ranking-panel"><h3>Most quoted authors</h3><p id="authors-absolute-note">Greek quotation passages containing 5+ words</p><ol id="authors-absolute"></ol></article>
+        <article class="ranking-panel"><h3>Most quoted authors, relative</h3><p id="authors-relative-note">5+ word Greek quotations per 1,000 source words · authors with 5,000+ words</p><ol id="authors-relative"></ol></article>
+      </div>
+      <article class="phrase-ranking"><div><h3 id="phrases-title">Most quoted Greek 5-grams</h3><p id="phrases-note">Passages containing the complete five-word phrase</p></div><ol id="phrases-ranking"></ol></article>
+      <details class="method-note"><summary>How these statistics are calculated</summary><p id="statistics-method"></p></details>
+    </section>
     <section class="catalog" aria-labelledby="catalog-title">
       <div class="catalog-heading"><div><p class="eyebrow">Browse the corpus</p><h2 id="catalog-title">All works</h2></div><p id="result-count" aria-live="polite"></p></div>
       <div class="catalog-controls"><label><span>Find a work</span><input id="work-search" type="search" placeholder="Author, title, or CTS URN"></label><label><span>Chunking</span><select id="chunk-filter"><option value="all">All works</option><option value="cards">Perseus cards available</option><option value="cts">CTS structure</option></select></label></div>

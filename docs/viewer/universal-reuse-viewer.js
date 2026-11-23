@@ -38,14 +38,38 @@
     });
   }
 
+  function collectHierarchy(nodes, ancestors = [], depth = 0, levels = []) {
+    if (!levels[depth]) levels[depth] = [];
+    nodes.forEach((node) => {
+      levels[depth].push({ ...node, ancestors, depth });
+      if ((node.children || []).length) collectHierarchy(node.children, [...ancestors, node], depth + 1, levels);
+    });
+    return levels;
+  }
+
   const lines = flattenUnits(topUnits);
+  const hierarchyLevels = collectHierarchy(topUnits);
   const averageUnitSize = lines.length
     ? lines.reduce((sum, line) => sum + line.stop - line.start + 1, 0) / lines.length
     : sequence.data.length;
   const hasNestedStructure = topUnits.some((unit) => (unit.children || []).length);
   const hasCards = Array.isArray(window.cardChunks) && window.cardChunks.length > 0;
-  const CHUNK_TERM = config.chunkTerm || (hasCards ? "card" : (hasNestedStructure && averageUnitSize >= 180 ? "section" : "passage"));
-  const PARENT_TERM = config.parentTerm || (hasCards && hasNestedStructure ? "book" : "division");
+  const hasProseHierarchy = !hasCards && hierarchyLevels.length > 1;
+  const hierarchyTerms = hierarchyLevels.map((level, index) => {
+    if (hierarchyLevels.length === 2 && index === 0 && config.parentTerm) return config.parentTerm;
+    if (index === hierarchyLevels.length - 1 && config.chunkTerm) return config.chunkTerm;
+    if (index === 0) return String(structure[0].name || structure[0].id || "division").replace(/s$/u, "");
+    if (index === hierarchyLevels.length - 1) return "section";
+    if (index === 1) return "chapter";
+    return `level ${index + 1}`;
+  });
+  let selectedChunkLevel = hasProseHierarchy ? hierarchyLevels.length - 1 : null;
+  let CHUNK_TERM = config.chunkTerm || (hasCards ? "card" : (hasNestedStructure && averageUnitSize >= 180 ? "section" : "passage"));
+  let PARENT_TERM = config.parentTerm || (hasCards && hasNestedStructure ? "book" : "division");
+  if (hasProseHierarchy) {
+    CHUNK_TERM = hierarchyTerms[selectedChunkLevel];
+    PARENT_TERM = selectedChunkLevel > 0 ? hierarchyTerms[selectedChunkLevel - 1] : "work";
+  }
   const UNIT_TERM = config.unitTerm || (averageUnitSize < 180 ? "line" : "section");
 
   function makeChunk(selectedLines, label, parent = null, card = null) {
@@ -106,20 +130,55 @@
     return chunks;
   }
 
-  const cardChunks = hasCards ? cardBasedChunks() : citationBasedChunks();
+  function hierarchyBasedChunks(level) {
+    return hierarchyLevels[level].map((node) => {
+      const selected = lines.filter((line) => line.start >= node.start && line.stop <= node.stop);
+      const parent = node.ancestors.length ? String(node.ancestors[node.ancestors.length - 1].id) : null;
+      return makeChunk(selected, node.id, parent);
+    }).filter(Boolean);
+  }
+
+  function chunksForCurrentLevel() {
+    if (hasCards) return cardBasedChunks();
+    if (hasProseHierarchy) return hierarchyBasedChunks(selectedChunkLevel);
+    return citationBasedChunks();
+  }
+
+  let cardChunks = chunksForCurrentLevel();
+
+  function setChunkLevel(level, passage) {
+    if (!hasProseHierarchy || !hierarchyLevels[level]) return;
+    selectedChunkLevel = level;
+    CHUNK_TERM = hierarchyTerms[level];
+    PARENT_TERM = level > 0 ? hierarchyTerms[level - 1] : "work";
+    cardChunks = chunksForCurrentLevel();
+    const nextChunk = passage ? chunkIndexForPassage(passage) : -1;
+    state.chunk = nextChunk >= 0 ? nextChunk : 0;
+    if (elements.chunkLevel) elements.chunkLevel.value = String(level);
+    populateChunkControls();
+  }
   const sourceTokens = [...sequence.data.matchAll(/\S+/gu)].map((match) => ({
     text: match[0],
     start: match.index,
     stop: match.index + match[0].length - 1
   }));
+  const greekToken = /[\u0370-\u03ff\u1f00-\u1fff]/u;
+  const greekTokenPrefix = new Uint32Array(sourceTokens.length + 1);
+  sourceTokens.forEach((token, index) => {
+    greekTokenPrefix[index + 1] = greekTokenPrefix[index] + Number(greekToken.test(token.text));
+  });
+  const noteGreekWordCounts = new WeakMap();
   const phraseCache = new Map();
   const state = {
     chunk: 0, citation: null, language: "all", source: "quotations", query: "",
-    sort: "text", word: null, phrase: null, phraseScope: "chunk", limit: PAGE_SIZE
+    sort: "text", word: null, phrase: null,
+    phraseScope: hasProseHierarchy ? `level-${hierarchyLevels.length - 1}` : "chunk",
+    phraseLength: 5, limit: PAGE_SIZE
   };
 
   const elements = {
     bookFilter: document.querySelector("#book-filter"),
+    chunkLevel: document.querySelector("#chunk-level"),
     chunkKind: document.querySelector("#chunk-kind"),
     chunkSelect: document.querySelector("#chunk-select"),
     chunkSummary: document.querySelector("#chunk-summary"),
@@ -128,11 +187,13 @@
     copyCitation: document.querySelector("#copy-citation"),
     greekText: document.querySelector("#greek-text"),
     languageFilter: document.querySelector("#language-filter"),
+    levelPicker: document.querySelector("#level-picker"),
     nextChunk: document.querySelector("#next-chunk"),
     overview: document.querySelector("#reuse-overview"),
     overviewLanguage: document.querySelector("#overview-language"),
     overviewSelection: document.querySelector("#overview-selection"),
     phraseList: document.querySelector("#phrase-list"),
+    phraseLength: document.querySelector("#phrase-length"),
     phraseScope: document.querySelector("#phrase-scope"),
     phraseStatus: document.querySelector("#phrase-status"),
     previousChunk: document.querySelector("#previous-chunk"),
@@ -161,7 +222,15 @@
   }
 
   function displayGreek(value) {
-    return value.normalize("NFC");
+    return value.replace(/^\p{M}+/u, "").normalize("NFC");
+  }
+
+  function tokenDisplayBounds(start, stop) {
+    let displayStart = Math.max(0, start);
+    let displayStop = Math.min(sequence.data.length - 1, stop);
+    while (displayStart > 0 && !/\s/u.test(sequence.data[displayStart - 1])) displayStart -= 1;
+    while (displayStop + 1 < sequence.data.length && !/\s/u.test(sequence.data[displayStop + 1])) displayStop += 1;
+    return { start: displayStart, stop: displayStop };
   }
 
   function titleCase(value) {
@@ -287,6 +356,18 @@
     if (state.phraseScope === "work") {
       return { start: 0, stop: sequence.data.length - 1, label: "the complete work" };
     }
+    const levelMatch = state.phraseScope.match(/^level-(\d+)$/u);
+    if (levelMatch) {
+      const level = hierarchyLevels[Number(levelMatch[1])] || [];
+      const node = level.find((item) => overlaps(item.start, item.stop, chunk.start, chunk.start));
+      if (node) {
+        return {
+          start: node.start,
+          stop: node.stop,
+          label: `${titleCase(hierarchyTerms[Number(levelMatch[1])])} ${node.id}`
+        };
+      }
+    }
     if (state.phraseScope === "parent" && chunk.parent) {
       const parentLines = lines.filter((line) => line.ancestors.some((ancestor) => String(ancestor.id) === chunk.parent));
       if (parentLines.length) {
@@ -311,9 +392,22 @@
     return low;
   }
 
+  function greekWordsInNote(note) {
+    if (noteGreekWordCounts.has(note)) return noteGreekWordCounts.get(note);
+    const first = lowerBound(sourceTokens, note.start, "start");
+    const afterLast = lowerBound(sourceTokens, note.stop + 1, "stop");
+    const count = greekTokenPrefix[afterLast] - greekTokenPrefix[first];
+    noteGreekWordCounts.set(note, count);
+    return count;
+  }
+
+  function sensitivityMatches(note) {
+    return greekWordsInNote(note) >= state.phraseLength;
+  }
+
   function rankedPhrases() {
     const scope = phraseScopeDetails();
-    const cacheKey = [state.phraseScope, scope.start, scope.stop, state.source, state.language].join(":");
+    const cacheKey = [state.phraseScope, scope.start, scope.stop, state.source, state.language, state.phraseLength].join(":");
     if (phraseCache.has(cacheKey)) return phraseCache.get(cacheKey);
 
     const tokens = sourceTokens.filter((token) => token.start >= scope.start && token.stop <= scope.stop);
@@ -321,10 +415,10 @@
     tracks.forEach((track) => {
       if (!sourceMatches(track) || !languageMatches(track)) return;
       track.notes.forEach((note) => {
-        if (overlaps(note.start, note.stop, scope.start, scope.stop)) notes.push({ track, note });
+        if (sensitivityMatches(note) && overlaps(note.start, note.stop, scope.start, scope.stop)) notes.push({ track, note });
       });
     });
-    if (tokens.length < 3 || !notes.length) {
+    if (tokens.length < state.phraseLength || !notes.length) {
       const result = { scope, phrases: [], passageCount: notes.length };
       phraseCache.set(cacheKey, result);
       return result;
@@ -347,9 +441,10 @@
     }
 
     const candidates = [];
-    [3, 4, 5, 6, 8, 10, 12].forEach((length) => {
+    [state.phraseLength].forEach((length) => {
       const strongest = [];
       for (let start = 0; start + length <= tokens.length; start += 1) {
+        if (!tokens.slice(start, start + length).every((token) => greekToken.test(token.text))) continue;
         let support = Infinity;
         for (let offset = 0; offset < length; offset += 1) {
           support = Math.min(support, coverage[start + offset]);
@@ -397,7 +492,7 @@
   function renderPhrases() {
     const result = rankedPhrases();
     elements.phraseScope.value = state.phraseScope;
-    elements.phraseStatus.textContent = `Ranked by passages that contain the complete phrase in ${result.scope.label}; ${result.passageCount.toLocaleString()} filtered reuse passages considered.`;
+    elements.phraseStatus.textContent = `Ranked ${state.phraseLength}-word Greek phrases by passages that contain the complete phrase in ${result.scope.label}; ${result.passageCount.toLocaleString()} filtered reuse passages considered.`;
     if (!result.phrases.length) {
       const empty = document.createElement("p");
       empty.className = "phrase-empty";
@@ -430,7 +525,7 @@
     const matches = [];
     tracks.forEach((track) => {
       track.notes.forEach((note) => {
-        if (overlaps(note.start, note.stop, bounds.start, bounds.stop)) {
+        if (sensitivityMatches(note) && overlaps(note.start, note.stop, bounds.start, bounds.stop)) {
           matches.push({ track, note });
         }
       });
@@ -567,6 +662,7 @@
       if (!sourceMatches(track)) return;
       if (!languageMatches(track)) return;
       track.notes.forEach((note) => {
+        if (!sensitivityMatches(note)) return;
         const start = Math.max(0, Math.min(bins - 1, Math.floor(note.start / textLength * bins)));
         const end = Math.max(start, Math.min(bins - 1, Math.floor(note.stop / textLength * bins)));
         changes[start] += 1;
@@ -643,7 +739,7 @@
     const language = state.language === "all"
       ? "All languages"
       : (languageNames[state.language] || state.language);
-    elements.overviewLanguage.textContent = `${language} · ${scopeLabel()}`;
+    elements.overviewLanguage.textContent = `${language} · ${scopeLabel()} · ${state.phraseLength}+ word matches`;
     const chunk = cardChunks[state.chunk];
     elements.overviewSelection.textContent = `Current ${CHUNK_TERM}: ${chunk.label}`;
   }
@@ -675,18 +771,19 @@
     quote.setAttribute("aria-label", "Matched Greek quotation");
 
     const selection = state.phrase || state.word;
-    const passage = sequence.data.slice(note.start, note.stop + 1);
+    const display = tokenDisplayBounds(note.start, note.stop);
+    const passage = sequence.data.slice(display.start, display.stop + 1);
     if (!selection || !overlaps(note.start, note.stop, selection.start, selection.stop)) {
-      quote.textContent = passage;
+      quote.textContent = displayGreek(passage);
       return quote;
     }
 
-    const highlightStart = Math.max(note.start, selection.start);
-    const highlightStop = Math.min(note.stop, selection.stop);
-    quote.append(document.createTextNode(sequence.data.slice(note.start, highlightStart)));
+    const highlightStart = Math.max(display.start, selection.start);
+    const highlightStop = Math.min(display.stop, selection.stop);
+    quote.append(document.createTextNode(displayGreek(sequence.data.slice(display.start, highlightStart))));
     const selected = document.createElement("mark");
-    selected.textContent = sequence.data.slice(highlightStart, highlightStop + 1);
-    quote.append(selected, document.createTextNode(sequence.data.slice(highlightStop + 1, note.stop + 1)));
+    selected.textContent = displayGreek(sequence.data.slice(highlightStart, highlightStop + 1));
+    quote.append(selected, document.createTextNode(displayGreek(sequence.data.slice(highlightStop + 1, display.stop + 1))));
     return quote;
   }
 
@@ -756,6 +853,10 @@
     if (state.word) params.set("word", `${state.word.start}-${state.word.stop}`);
     if (state.phrase) params.set("phrase", `${state.phrase.start}-${state.phrase.stop}`);
     if (state.phraseScope !== "chunk") params.set("phraseScope", state.phraseScope);
+    if (state.phraseLength !== 5) params.set("ngram", String(state.phraseLength));
+    if (hasProseHierarchy && selectedChunkLevel !== hierarchyLevels.length - 1) {
+      params.set("view", hierarchyTerms[selectedChunkLevel]);
+    }
     history.replaceState(null, "", `${location.pathname}?${params.toString()}`);
   }
 
@@ -773,7 +874,7 @@
     elements.chunkSummary.textContent = `${heatMatches.length.toLocaleString()} detected reuse passages in ${new Set(heatMatches.map(({ track }) => track.id)).size.toLocaleString()} ${scopeLabel()} overlap this ${CHUNK_TERM}${state.language === "all" ? "" : ` in ${languageNames[state.language] || state.language}`}.`;
     elements.totalReuseCount.textContent = tracks
       .filter((track) => sourceMatches(track) && languageMatches(track))
-      .reduce((total, track) => total + track.notes.length, 0)
+      .reduce((total, track) => total + track.notes.filter(sensitivityMatches).length, 0)
       .toLocaleString();
     elements.previousChunk.disabled = state.chunk === 0;
     elements.nextChunk.disabled = state.chunk === cardChunks.length - 1;
@@ -784,8 +885,10 @@
     updateRoute();
   }
 
-  function populateControls() {
+  function populateChunkControls() {
     elements.sceneCount.textContent = cardChunks.length;
+    document.querySelector("#chunk-count-label").textContent = `${titleCase(CHUNK_TERM)}s`;
+    document.querySelector("#default-view").textContent = titleCase(CHUNK_TERM);
     elements.chunkSelect.replaceChildren(
       ...cardChunks.map((chunk, index) => {
         const option = document.createElement("option");
@@ -801,18 +904,39 @@
 
     elements.previousChunk.textContent = `Previous ${CHUNK_TERM}`;
     elements.nextChunk.textContent = `Next ${CHUNK_TERM}`;
-    const phraseOptions = [
-      ["work", "Work"],
-      ...(cardChunks.some((chunk) => chunk.parent) ? [["parent", titleCase(PARENT_TERM)]] : []),
-      ["chunk", titleCase(CHUNK_TERM)]
-    ];
+  }
+
+  function populatePhraseScopes() {
+    const phraseOptions = hasProseHierarchy
+      ? [["work", "Work"], ...hierarchyTerms.map((term, index) => [`level-${index}`, titleCase(term)])]
+      : [
+        ["work", "Work"],
+        ...(cardChunks.some((chunk) => chunk.parent) ? [["parent", titleCase(PARENT_TERM)]] : []),
+        ["chunk", titleCase(CHUNK_TERM)]
+      ];
     elements.phraseScope.replaceChildren(...phraseOptions.map(([value, label]) => {
       const option = document.createElement("option");
       option.value = value;
       option.textContent = label;
-      if (value === "chunk") option.selected = true;
+      if (value === state.phraseScope) option.selected = true;
       return option;
     }));
+  }
+
+  function populateControls() {
+    populateChunkControls();
+    if (hasProseHierarchy) {
+      elements.levelPicker.hidden = false;
+      elements.levelPicker.closest(".chunk-nav").classList.add("has-levels");
+      elements.chunkLevel.replaceChildren(...hierarchyTerms.map((term, index) => {
+        const option = document.createElement("option");
+        option.value = String(index);
+        option.textContent = titleCase(term);
+        option.selected = index === selectedChunkLevel;
+        return option;
+      }));
+    }
+    populatePhraseScopes();
 
     const languages = [...new Set(tracks.map((track) => publicLanguage(track.lang)).filter(Boolean))].sort();
     const all = document.createElement("option");
@@ -854,6 +978,14 @@
     const requestedWord = params.get("word");
     const requestedPhrase = params.get("phrase");
     const requestedPhraseScope = params.get("phraseScope");
+    const requestedPhraseLength = Number(params.get("ngram"));
+    const requestedView = params.get("view");
+    const requestedLevel = requestedView
+      ? hierarchyTerms.findIndex((term) => term === requestedView.toLocaleLowerCase())
+      : -1;
+    if (requestedLevel >= 0 && requestedLevel !== selectedChunkLevel) {
+      setChunkLevel(requestedLevel, requestedPassage);
+    }
     const requestedChunk = requestedPassage ? chunkIndexForPassage(requestedPassage) : -1;
     if (requestedChunk >= 0) {
       state.chunk = requestedChunk;
@@ -871,7 +1003,11 @@
       state.sort = requestedSort;
       elements.quotationSort.value = requestedSort;
     }
-    if (["work", "parent", "chunk"].includes(requestedPhraseScope)) state.phraseScope = requestedPhraseScope;
+    if (["work", "parent", "chunk"].includes(requestedPhraseScope) || /^level-\d+$/u.test(requestedPhraseScope || "")) {
+      state.phraseScope = requestedPhraseScope;
+    }
+    if ([3, 5].includes(requestedPhraseLength)) state.phraseLength = requestedPhraseLength;
+    elements.phraseLength.value = String(state.phraseLength);
     const wordBounds = requestedWord && requestedWord.match(/^(\d+)-(\d+)$/);
     if (wordBounds) {
       const start = Number(wordBounds[1]);
@@ -915,6 +1051,15 @@
   elements.chunkSelect.addEventListener("change", (event) => {
     state.chunk = Number(event.target.value);
     state.citation = cardChunks[state.chunk].lines[0].id;
+    state.word = null;
+    state.phrase = null;
+    state.limit = PAGE_SIZE;
+    render();
+  });
+
+  elements.chunkLevel.addEventListener("change", (event) => {
+    const passage = state.citation || cardChunks[state.chunk].lines[0].id;
+    setChunkLevel(Number(event.target.value), passage);
     state.word = null;
     state.phrase = null;
     state.limit = PAGE_SIZE;
@@ -993,6 +1138,14 @@
 
   elements.phraseScope.addEventListener("change", (event) => {
     state.phraseScope = event.target.value;
+    state.phrase = null;
+    state.word = null;
+    state.limit = PAGE_SIZE;
+    render();
+  });
+
+  elements.phraseLength.addEventListener("change", (event) => {
+    state.phraseLength = Number(event.target.value) === 3 ? 3 : 5;
     state.phrase = null;
     state.word = null;
     state.limit = PAGE_SIZE;

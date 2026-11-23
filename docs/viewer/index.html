@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Explore Greek text reuse in the Harvard ID1 Million Book Library.">
   <title>Perseus Text Reuse Viewer</title>
-  <link rel="stylesheet" href="universal-reuse-viewer.css?v=perseus-1">
-  <script src="loader.js?v=pages-1" defer></script>
+  <link rel="stylesheet" href="universal-reuse-viewer.css?v=hierarchy-scopes-2">
+  <script src="loader.js?v=hierarchy-scopes-2" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -33,6 +33,7 @@
 
     <nav class="chunk-nav" aria-label="Passage navigation">
       <button class="nav-button" id="previous-chunk" type="button">Previous passage</button>
+      <label class="level-picker" id="level-picker" hidden><span>View by</span><select id="chunk-level" aria-label="Choose reading granularity"></select></label>
       <label class="chunk-picker"><span>Passage</span><select id="chunk-select" aria-label="Choose a passage"></select></label>
       <button class="nav-button" id="next-chunk" type="button">Next passage</button>
     </nav>
@@ -44,7 +45,7 @@
     </section>
 
     <section class="phrase-panel" aria-labelledby="phrase-title">
-      <div class="phrase-heading"><div><p class="eyebrow">Ranked reuse spans</p><h2 id="phrase-title">Most quoted phrases</h2></div><label class="phrase-scope"><span>Scope</span><select id="phrase-scope"></select></label></div>
+      <div class="phrase-heading"><div><p class="eyebrow">Ranked reuse spans</p><h2 id="phrase-title">Most quoted Greek phrases</h2></div><div class="phrase-controls"><label class="phrase-scope"><span>Scope</span><select id="phrase-scope"></select></label><label class="phrase-scope"><span>Match sensitivity</span><select id="phrase-length"><option value="5" selected>Higher precision (5 words)</option><option value="3">Higher recall (3 words)</option></select></label></div></div>
       <p class="phrase-status" id="phrase-status"></p><div class="phrase-list" id="phrase-list" aria-live="polite"></div>
     </section>
 

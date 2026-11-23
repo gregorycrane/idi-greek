@@ -38,7 +38,7 @@
   async function start() {
     const params = new URLSearchParams(location.search);
     const requested = params.get("work");
-    const response = await fetch("../catalog.json");
+    const response = await fetch("../catalog.json", { cache: "no-store" });
     if (!response.ok) throw new Error("The work catalog could not be loaded.");
     const catalog = await response.json();
     const work = catalog.works.find((item) => item.id === requested);
@@ -54,7 +54,7 @@
     document.querySelector("#tei-source").href = work.tei;
     document.querySelector("#viewer-note").textContent = work.hasCards
       ? "Canonical Perseus card boundaries are used for this work; CTS citations open the card containing the cited passage."
-      : "Navigation follows this work’s CTS citation structure; compact line-level works are grouped into readable passages.";
+      : "Navigation follows this work’s CTS citation hierarchy; use View by to move between available prose levels.";
 
     const base = `${dataRoot}${work.authorId}/${work.workId}/`;
     await loadDataScript(`${base}sequence.js`);
@@ -73,7 +73,7 @@
     };
     main.hidden = false;
     loading.remove();
-    await loadScript("universal-reuse-viewer.js?v=universal-1");
+    await loadScript("universal-reuse-viewer.js?v=hierarchy-scopes-2");
   }
 
   start().catch((error) => {

@@ -64,7 +64,7 @@ def main():
             "unitTerm": "line" if has_cards else None,
         }
         if item["id"] == "tlg0086.tlg034":
-            item.update(chunkTerm="section", parentTerm="chapter", unitTerm="section")
+            item.update(chunkTerm="subsection", parentTerm="chapter", unitTerm="section")
         works.append(item)
 
     works.sort(key=lambda item: (item["author"].casefold(), item["title"].casefold(), item["id"]))
