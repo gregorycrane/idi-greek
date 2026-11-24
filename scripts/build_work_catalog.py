@@ -37,10 +37,19 @@ def main():
     for work_dir in sorted(QUOTES.glob("*/*")):
         if not work_dir.is_dir():
             continue
-        sequence_path = work_dir / "sequence.js"
-        structure_path = work_dir / "structure.js"
-        track_paths = sorted(work_dir.glob("tracks*.js"), key=track_sort)
-        if not sequence_path.exists() or not structure_path.exists() or not track_paths:
+        override_path = work_dir / "source-override.json"
+        override = json.loads(override_path.read_text()) if override_path.exists() else {}
+        sequence_file = override.get("sequenceFile", "sequence.js")
+        structure_file = override.get("structureFile", "structure.js")
+        sequence_path = work_dir / sequence_file
+        structure_path = work_dir / structure_file
+        track_files = override.get("trackFiles")
+        track_paths = (
+            [work_dir / name for name in track_files]
+            if track_files is not None
+            else sorted(work_dir.glob("tracks*.js"), key=track_sort)
+        )
+        if not sequence_path.exists() or not structure_path.exists() or (not track_paths and not override):
             continue
 
         author_id = work_dir.parent.name
@@ -58,6 +67,8 @@ def main():
             "urn": f"urn:cts:greekLit:{author_id}.{work_id}",
             "tei": "https://github.com/PerseusDL/canonical-greekLit/tree/master/data/" f"{author_id}/{work_id}",
             "trackFiles": [path.name for path in track_paths],
+            "sequenceFile": sequence_file,
+            "structureFile": structure_file,
             "hasCards": has_cards,
             "chunkTerm": "card" if has_cards else None,
             "parentTerm": "book" if has_cards and author_id == "tlg0012" else None,
@@ -65,6 +76,10 @@ def main():
         }
         if item["id"] == "tlg0086.tlg034":
             item.update(chunkTerm="subsection", parentTerm="chapter", unitTerm="section")
+        if override.get("dataNotice"):
+            item["dataNotice"] = override["dataNotice"]
+        if override.get("dataVersion"):
+            item["dataVersion"] = override["dataVersion"]
         works.append(item)
 
     works.sort(key=lambda item: (item["author"].casefold(), item["title"].casefold(), item["id"]))

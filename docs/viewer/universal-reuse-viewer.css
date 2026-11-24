@@ -28,6 +28,7 @@ a { color: var(--blue); }
 button, input, select { font: inherit; }
 
 main { width: min(1500px, 94vw); margin: 0 auto; }
+.data-notice { margin: 1rem 0; padding: .8rem 1rem; border: 1px solid #d7a75b; border-radius: 7px; color: #633b0d; background: #fff6df; line-height: 1.45; }
 
 .work-heading {
   display: flex;

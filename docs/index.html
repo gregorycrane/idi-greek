@@ -6,10 +6,10 @@
   <meta name="description" content="Browse Greek works with detected text reuse in the Harvard ID1 Million Book Library.">
   <title>Perseus Text Reuse — All Works</title>
   <link rel="stylesheet" href="assets/perseus-navigation.css?v=2">
-  <link rel="stylesheet" href="home.css?v=perseus-branding-1">
+  <link rel="stylesheet" href="home.css?v=language-ranking-1">
   <script src="assets/perseus-navigation.js?v=2"></script>
   <script src="home-navigation.js?v=perseus-branding-1" defer></script>
-  <script src="home.js?v=ranked-works-pagination-1" defer></script>
+  <script src="home.js?v=language-ranking-1" defer></script>
 </head>
 <body>
   <header class="perseus-shell">
@@ -32,7 +32,7 @@
     <div id="home-browse-navigation"></div>
   </header>
   <main>
-    <section class="hero"><p class="eyebrow">Institutional Books 1.0</p><h1>Greek works in the reuse corpus</h1><p>Explore quotation density, word-level heatmaps, the most quoted phrases, and the books that reuse each passage.</p><dl><div><dt>Works</dt><dd id="work-count">—</dd></div><div><dt>Words</dt><dd id="word-count">—</dd></div><div><dt id="quotation-label">Greek quotations (5+ words)</dt><dd id="quotation-count">—</dd></div><div><dt>Unique quoting books</dt><dd id="book-count">—</dd></div></dl></section>
+    <section class="hero"><p class="eyebrow">Institutional Books 1.0</p><h1>Greek works in the reuse corpus</h1><p>Explore quotation density, word-level heatmaps, the most quoted phrases, and the books that reuse each passage.</p><dl><div><dt>Works</dt><dd id="work-count">—</dd></div><div><dt>Words</dt><dd id="word-count">—</dd></div><div><dt id="quotation-label">Greek quotations (5+ words)</dt><dd id="quotation-count">—</dd></div><div><dt>Unique quoting books</dt><dd id="book-count">—</dd></div><div><dt>Languages of quoting books</dt><dd id="language-count">—</dd></div></dl></section>
     <section class="statistics" aria-labelledby="statistics-title">
       <div class="statistics-heading"><div><p class="eyebrow">Corpus statistics</p><h2 id="statistics-title">What the library quotes</h2></div><div class="statistics-controls"><label for="statistics-match-mode">Match sensitivity</label><select id="statistics-match-mode"><option value="5">Higher precision (5 words)</option><option value="3">Higher recall (3 words)</option></select><label class="relative-exclusion"><input id="exclude-new-testament" type="checkbox"><span>Exclude New Testament works from relative rankings</span></label><p id="statistics-note">Loading corpus rankings…</p></div></div>
       <div class="metric-grid" aria-label="Quotation coverage"><article><span>Quoted-word occurrences</span><strong id="quoted-word-occurrences">—</strong><small id="quoted-word-note">Words counted once for every qualifying 5+ word Greek quotation</small></article><article><span>Distinct source words quoted</span><strong id="distinct-quoted-words">—</strong><small>Word positions touched by at least one qualifying quotation</small></article><article><span>Authors</span><strong id="author-count">—</strong><small>Authors represented by works in the corpus</small></article><article><span>Works with Perseus cards</span><strong id="card-count">—</strong><small>Poetry chunks using canonical card breaks</small></article></div>
@@ -42,6 +42,15 @@
         <article class="ranking-panel"><h3>Most quoted authors</h3><p id="authors-absolute-note">Greek quotation passages containing 5+ words</p><ol id="authors-absolute"></ol></article>
         <article class="ranking-panel"><h3>Most quoted authors, relative</h3><p id="authors-relative-note">5+ word Greek quotations per 1,000 source words · authors with 5,000+ words</p><ol id="authors-relative"></ol></article>
       </div>
+      <article class="language-ranking" aria-labelledby="languages-title">
+        <div>
+          <h3 id="languages-title">Languages of quoting books</h3>
+          <p id="languages-note">Ranked by unique quoting books after likely editions are excluded</p>
+        </div>
+        <div class="language-ranking-head" aria-hidden="true"><span>Language</span><span>Books</span><span>Quotations</span></div>
+        <ol id="languages-ranking"></ol>
+        <button class="ranking-more" id="languages-more" type="button" aria-controls="languages-ranking" hidden>Show 15 more languages</button>
+      </article>
       <article class="phrase-ranking"><div><h3 id="phrases-title">Most quoted Greek 5-grams</h3><p id="phrases-note">Passages containing the complete five-word phrase</p></div><ol id="phrases-ranking"></ol></article>
       <details class="method-note"><summary>How these statistics are calculated</summary><p id="statistics-method"></p></details>
     </section>

@@ -21,10 +21,8 @@
     pageBlockNotes: 50,
     pageBlockMedianCharacters: 500
   });
-  const languageNames = {
-    deu: "German", grc: "Greek", eng: "English", fra: "French",
-    ita: "Italian", lat: "Latin"
-  };
+  const languageNames = window.PERSEUS_LANGUAGE_NAMES || {};
+  const bookLanguageOverrides = window.PERSEUS_BOOK_LANGUAGE_OVERRIDES || {};
 
   const tracks = config.trackVariables.flatMap((name) => window[name] || []);
   const topUnits = structure[0].notes || [];
@@ -239,11 +237,15 @@
   }
 
   function publicLanguage(language) {
-    return language === "ell" ? "grc" : language;
+    return language;
+  }
+
+  function trackLanguage(track) {
+    return publicLanguage(bookLanguageOverrides[String(track.id || "").toUpperCase()] || track.lang || "und");
   }
 
   function languageMatches(track) {
-    return state.language === "all" || publicLanguage(track.lang) === state.language;
+    return state.language === "all" || trackLanguage(track) === state.language;
   }
 
   function chunkIndexForPassage(passage) {
@@ -335,7 +337,7 @@
     });
     matches.forEach(({ track }) => {
       if (track.isEdition) return;
-      const language = publicLanguage(track.lang);
+      const language = trackLanguage(track);
       counts.set(language, (counts.get(language) || 0) + 1);
     });
     const total = [...counts.values()].reduce((sum, count) => sum + count, 0);
@@ -815,7 +817,7 @@
           const meta = document.createElement("p");
           meta.className = "reuse-meta";
           const sourceType = track.isEdition ? "Full edition" : "Quotation";
-          const language = publicLanguage(track.lang);
+          const language = trackLanguage(track);
           meta.textContent = `${lineRangeForNote(note)} · ${sourceType} · ${languageNames[language] || language} · ${track.date || "Undated"}`;
 
           const title = document.createElement("h3");
@@ -1016,7 +1018,8 @@
     }
     populatePhraseScopes();
 
-    const languages = [...new Set(tracks.map((track) => publicLanguage(track.lang)).filter(Boolean))].sort();
+    const languages = [...new Set(tracks.map(trackLanguage).filter(Boolean))]
+      .sort((left, right) => (languageNames[left] || left).localeCompare(languageNames[right] || right));
     const all = document.createElement("option");
     all.value = "all";
     all.textContent = "All languages";
@@ -1026,8 +1029,8 @@
       ...languages.map((language) => {
         const option = document.createElement("option");
         option.value = language;
-        option.textContent = languageNames[language] || language;
-        option.dataset.label = languageNames[language] || language;
+        option.textContent = languageNames[language] || `Unknown language (${language})`;
+        option.dataset.label = languageNames[language] || `Unknown language (${language})`;
         return option;
       })
     );
@@ -1069,7 +1072,7 @@
       state.chunk = requestedChunk;
       state.citation = String(requestedPassage);
     }
-    if (requestedLanguage && (requestedLanguage === "all" || tracks.some((track) => publicLanguage(track.lang) === requestedLanguage))) {
+    if (requestedLanguage && (requestedLanguage === "all" || tracks.some((track) => trackLanguage(track) === requestedLanguage))) {
       state.language = requestedLanguage;
       elements.languageFilter.value = requestedLanguage;
     }

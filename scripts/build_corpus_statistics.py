@@ -17,6 +17,9 @@ import unicodedata
 from collections import defaultdict, deque
 from pathlib import Path
 
+from language_names import language_name
+from build_book_language_overrides import read_asset
+
 
 ROOT = Path(__file__).resolve().parents[1]
 QUOTES = ROOT / "docs" / "quotes"
@@ -31,6 +34,7 @@ RELATIVE_WORK_MIN_WORDS = 1000
 RELATIVE_AUTHOR_MIN_WORDS = 5000
 NEW_TESTAMENT_AUTHOR = "New Testament"
 GREEK = re.compile(r"[\u0370-\u03ff\u1f00-\u1fff]")
+BOOK_LANGUAGE_OVERRIDES = read_asset()
 
 EDITION_HEURISTICS = {
     "wholeWorkCoverage": 0.6,
@@ -244,7 +248,7 @@ def ranked_items(items, relative=False, limit=RANK_LIMIT):
 def quotation_tracks(work, text_length: int):
     work_dir = QUOTES / work["authorId"] / work["workId"]
     merged_tracks = {}
-    for path in sorted(work_dir.glob("tracks*.js"), key=track_sort):
+    for path in (work_dir / name for name in work.get("trackFiles", [])):
         for track in load_assignment(path):
             existing = merged_tracks.setdefault(track["id"], {**track, "notes": []})
             existing["notes"].extend(track.get("notes", []))
@@ -257,7 +261,7 @@ def quotation_tracks(work, text_length: int):
 
 def analyze_work(work):
     work_dir = QUOTES / work["authorId"] / work["workId"]
-    text = load_assignment(work_dir / "sequence.js").get("data", "")
+    text = load_assignment(work_dir / work.get("sequenceFile", "sequence.js")).get("data", "")
     tokens = [(match.group(0), match.start(), match.end() - 1) for match in TOKEN.finditer(text)]
     quotations, editions = quotation_tracks(work, len(text))
     starts = [token[1] for token in tokens]
@@ -268,6 +272,7 @@ def analyze_work(work):
 
     notes_by_length = {length: [] for length in MATCH_LENGTHS}
     book_ids_by_length = {length: [] for length in MATCH_LENGTHS}
+    languages_by_length = {length: defaultdict(lambda: {"bookIds": set(), "quotationCount": 0}) for length in MATCH_LENGTHS}
     for track in quotations:
         track_qualifies = {length: False for length in MATCH_LENGTHS}
         for note in track["notes"]:
@@ -283,6 +288,13 @@ def analyze_work(work):
         for length in MATCH_LENGTHS:
             if track_qualifies[length]:
                 book_ids_by_length[length].append(track["id"])
+                language = BOOK_LANGUAGE_OVERRIDES.get(str(track["id"]).upper(), track.get("lang") or "und")
+                languages_by_length[length][language]["bookIds"].add(track["id"])
+                languages_by_length[length][language]["quotationCount"] += sum(
+                    1 for note in track["notes"]
+                    if greek_prefix[bisect.bisect_left(stops, min(len(text) - 1, note["stop"]) + 1)]
+                    - greek_prefix[bisect.bisect_left(starts, max(0, note["start"]))] >= length
+                )
 
     word_count = len(tokens)
     modes = {}
@@ -315,6 +327,13 @@ def analyze_work(work):
         modes[str(length)] = {
             "item": item,
             "bookIds": book_ids_by_length[length],
+            "languages": {
+                code: {
+                    "bookIds": sorted(values["bookIds"]),
+                    "quotationCount": values["quotationCount"],
+                }
+                for code, values in languages_by_length[length].items()
+            },
             "quotedWordOccurrences": quoted_word_occurrences,
             "distinctQuotedWords": distinct_quoted_words,
             "phrases": top_phrases(work, work_dir, text, tokens, quotation_notes, length)
@@ -336,6 +355,8 @@ def main():
         for length in MATCH_LENGTHS
     }
     unique_books = {str(length): set() for length in MATCH_LENGTHS}
+    language_books = {str(length): defaultdict(set) for length in MATCH_LENGTHS}
+    language_quotations = {str(length): defaultdict(int) for length in MATCH_LENGTHS}
     global_phrases = {str(length): [] for length in MATCH_LENGTHS}
     mode_totals = {str(length): defaultdict(int) for length in MATCH_LENGTHS}
     totals = defaultdict(int)
@@ -360,6 +381,9 @@ def main():
                 mode_totals[key]["quotedWordOccurrences"] += mode["quotedWordOccurrences"]
                 mode_totals[key]["distinctQuotedWords"] += mode["distinctQuotedWords"]
                 unique_books[key].update(mode["bookIds"])
+                for code, values in mode["languages"].items():
+                    language_books[key][code].update(values["bookIds"])
+                    language_quotations[key][code] += values["quotationCount"]
                 global_phrases[key].extend(mode["phrases"])
             if number % 100 == 0:
                 print(f"Processed {number:,}/{len(catalog['works']):,} works", flush=True)
@@ -378,6 +402,12 @@ def main():
         global_phrases[key].sort(key=lambda item: (-item["passages"], -item["wordCount"], item["author"], item["title"]))
         if len(global_phrases[key]) < RANK_LIMIT or global_phrases[key][RANK_LIMIT - 1]["passages"] <= PHRASE_WORK_FLOOR:
             raise RuntimeError(f"Phrase work floor is too high to prove the global {length}-gram ranking")
+        quoting_languages = sorted(({
+            "code": code,
+            "name": language_name(code),
+            "bookCount": len(book_ids),
+            "quotationCount": language_quotations[key][code],
+        } for code, book_ids in language_books[key].items()), key=lambda item: (-item["bookCount"], item["name"]))
         modes[key] = {
             "label": "Higher recall" if length == 3 else "Higher precision",
             "matchWords": length,
@@ -389,6 +419,7 @@ def main():
                 "quotedWordOccurrences": mode_totals[key]["quotedWordOccurrences"],
                 "distinctQuotedWords": mode_totals[key]["distinctQuotedWords"],
                 "uniqueQuotingBooks": len(unique_books[key]),
+                "quotingLanguageCount": len(quoting_languages),
                 "excludedEditionBooks": totals["editionBooks"],
                 "excludedEditionPassages": totals["editionPassages"],
             },
@@ -405,6 +436,7 @@ def main():
                 if item["wordCount"] >= RELATIVE_AUTHOR_MIN_WORDS and item["author"] != NEW_TESTAMENT_AUTHOR
             ), key=lambda item: (-item["quotesPerThousandWords"], -item["quotationCount"], item["author"]))[:RANK_LIMIT],
             "phrases": global_phrases[key][:RANK_LIMIT],
+            "quotingLanguages": quoting_languages,
         }
 
     payload = {

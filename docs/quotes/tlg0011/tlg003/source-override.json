@@ -1,0 +1,7 @@
+{
+  "sequenceFile": "canonical-sequence.js",
+  "structureFile": "canonical-structure.js",
+  "trackFiles": [],
+  "dataVersion": "canonical-ajax-1",
+  "dataNotice": "The prior Ajax export aligned a Latin translation, not the canonical Greek text. Ajax now displays the canonical perseus-grc2 Greek text; reuse results are withheld until Passim is rerun against that edition."
+}

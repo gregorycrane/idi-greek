@@ -10,7 +10,7 @@
     statistics: null,
     matchMode: "5",
     excludeNewTestament: false,
-    rankingLimits: { worksAbsolute: RANK_PAGE_SIZE, worksRelative: RANK_PAGE_SIZE }
+    rankingLimits: { worksAbsolute: RANK_PAGE_SIZE, worksRelative: RANK_PAGE_SIZE, languages: RANK_PAGE_SIZE }
   };
   const list = document.querySelector("#work-list");
   const resultCount = document.querySelector("#result-count");
@@ -28,6 +28,7 @@
   function resetWorkRankingLimits() {
     state.rankingLimits.worksAbsolute = RANK_PAGE_SIZE;
     state.rankingLimits.worksRelative = RANK_PAGE_SIZE;
+    state.rankingLimits.languages = RANK_PAGE_SIZE;
   }
 
   function renderWorkRanking(selector, works, relative, limitKey, buttonSelector) {
@@ -69,6 +70,31 @@
     }));
   }
 
+  function renderLanguageRanking(languages) {
+    const limit = state.rankingLimits.languages;
+    const listElement = document.querySelector("#languages-ranking");
+    listElement.replaceChildren(...languages.slice(0, limit).map((language) => {
+      const item = document.createElement("li");
+      const name = document.createElement("span");
+      name.textContent = language.name;
+      const code = document.createElement("small");
+      code.textContent = language.code;
+      name.append(code);
+      const books = document.createElement("strong");
+      books.textContent = number(language.bookCount);
+      books.title = `${number(language.bookCount)} unique quoting books`;
+      const quotations = document.createElement("span");
+      quotations.textContent = number(language.quotationCount);
+      quotations.title = `${number(language.quotationCount)} qualifying quotation passages`;
+      item.append(name, books, quotations);
+      return item;
+    }));
+    const button = document.querySelector("#languages-more");
+    const remaining = Math.max(0, languages.length - limit);
+    button.hidden = remaining === 0;
+    if (remaining) button.textContent = `Show ${Math.min(RANK_PAGE_SIZE, remaining)} more languages`;
+  }
+
   function renderStatistics(statistics) {
     const mode = statistics.modes[state.matchMode];
     const totals = mode.totals;
@@ -78,6 +104,11 @@
     document.querySelector("#quotation-label").textContent = `Greek quotations (${words}+ ${wordLabel})`;
     document.querySelector("#quotation-count").textContent = number(totals.quotationCount);
     document.querySelector("#book-count").textContent = number(totals.uniqueQuotingBooks);
+    const languageCount = document.querySelector("#language-count");
+    languageCount.textContent = number(totals.quotingLanguageCount);
+    languageCount.title = mode.quotingLanguages
+      .map((language) => `${language.name}: ${number(language.bookCount)} quoting books`)
+      .join("\n");
     document.querySelector("#quoted-word-occurrences").textContent = number(totals.quotedWordOccurrences);
     document.querySelector("#quoted-word-note").textContent = `Words counted once for every qualifying ${words}+ word Greek quotation`;
     document.querySelector("#distinct-quoted-words").textContent = number(totals.distinctQuotedWords);
@@ -94,6 +125,7 @@
     renderWorkRanking("#works-relative", state.excludeNewTestament ? mode.worksRelativeWithoutNewTestament : mode.worksRelative, true, "worksRelative", "#works-relative-more");
     renderAuthorRanking("#authors-absolute", mode.authorsAbsolute, false);
     renderAuthorRanking("#authors-relative", state.excludeNewTestament ? mode.authorsRelativeWithoutNewTestament : mode.authorsRelative, true);
+    renderLanguageRanking(mode.quotingLanguages);
 
     document.querySelector("#phrases-ranking").replaceChildren(...mode.phrases.map((phrase) => {
       const item = document.createElement("li");
@@ -110,7 +142,7 @@
     }));
     const minimums = statistics.method.relativeMinimums;
     const newTestamentMethod = state.excludeNewTestament ? " New Testament works are excluded from the two relative rankings." : "";
-    document.querySelector("#statistics-method").textContent = `${mode.label} counts detected reuse passages containing at least ${words} Greek-script words. Relative rankings report qualifying passages per 1,000 source-text words and require at least ${number(minimums.workWords)} words per work and ${number(minimums.authorWords)} words per author.${newTestamentMethod} Greek ${words}-grams are ranked by passages containing the complete phrase. ${number(totals.excludedEditionBooks)} likely edition records (${number(totals.excludedEditionPassages)} passages) were excluded.`;
+    document.querySelector("#statistics-method").textContent = `${mode.label} counts detected reuse passages containing at least ${words} Greek-script words. The ${number(totals.quotingLanguageCount)} quoting-document languages are counted after likely editions and shorter matches are excluded. Relative rankings report qualifying passages per 1,000 source-text words and require at least ${number(minimums.workWords)} words per work and ${number(minimums.authorWords)} words per author.${newTestamentMethod} Greek ${words}-grams are ranked by passages containing the complete phrase. ${number(totals.excludedEditionBooks)} likely edition records (${number(totals.excludedEditionPassages)} passages) were excluded.`;
   }
 
   function filteredWorks() {
@@ -177,6 +209,10 @@
       state.rankingLimits[key] += RANK_PAGE_SIZE;
       if (state.statistics) renderStatistics(state.statistics);
     });
+  });
+  document.querySelector("#languages-more").addEventListener("click", () => {
+    state.rankingLimits.languages += RANK_PAGE_SIZE;
+    if (state.statistics) renderStatistics(state.statistics);
   });
   showMore.addEventListener("click", () => { state.limit += PAGE_SIZE; render(); });
 }());

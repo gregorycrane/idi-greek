@@ -90,10 +90,11 @@
       : "Navigation follows this work’s CTS citation hierarchy; use View by to move between available prose levels.";
 
     const base = `${dataRoot}${work.authorId}/${work.workId}/`;
-    await loadDataScript(`${base}sequence.js`);
-    await loadDataScript(`${base}structure.js`);
-    for (const file of work.trackFiles) await loadDataScript(`${base}${file}`);
-    if (work.hasCards) await loadDataScript(`${base}card-chunks.js`);
+    const dataSuffix = work.dataVersion ? `?v=${encodeURIComponent(work.dataVersion)}` : "";
+    await loadDataScript(`${base}${work.sequenceFile || "sequence.js"}${dataSuffix}`);
+    await loadDataScript(`${base}${work.structureFile || "structure.js"}${dataSuffix}`);
+    for (const file of work.trackFiles) await loadDataScript(`${base}${file}${dataSuffix}`);
+    if (work.hasCards) await loadDataScript(`${base}card-chunks.js${dataSuffix}`);
 
     window.universalViewerConfig = {
       authorId: work.authorId,
@@ -105,10 +106,15 @@
       unitTerm: work.unitTerm,
       multitextBase: multitextUrl({ w: work.id })
     };
+    if (work.dataNotice) {
+      const notice = document.querySelector("#data-notice");
+      notice.textContent = work.dataNotice;
+      notice.hidden = false;
+    }
     main.hidden = false;
     document.querySelector("#passage-navigation").hidden = false;
     loading.remove();
-    await loadScript("universal-reuse-viewer.js?v=hierarchy-navigation-1");
+    await loadScript("universal-reuse-viewer.js?v=language-periods-1");
   }
 
   start().catch((error) => {
