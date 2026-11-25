@@ -6,10 +6,10 @@
   <meta name="description" content="Browse Greek and Latin works with detected text reuse in the Harvard Institutional Books 1.0 collection.">
   <title>Perseus Text Reuse — Greek and Latin</title>
   <link rel="stylesheet" href="assets/perseus-navigation.css?v=2">
-  <link rel="stylesheet" href="home.css?v=combined-corpora-2">
+  <link rel="stylesheet" href="home.css?v=toc-metrics-1">
   <script src="assets/perseus-navigation.js?v=2"></script>
   <script src="home-navigation.js?v=combined-corpora-2" defer></script>
-  <script src="home.js?v=combined-corpora-2" defer></script>
+  <script src="home.js?v=toc-metrics-1" defer></script>
 </head>
 <body>
   <header class="perseus-shell">
@@ -65,9 +65,9 @@
       <article class="phrase-ranking"><div><h3 id="phrases-title">Most quoted 5-grams</h3><p id="phrases-note">Passages containing the complete five-word phrase</p></div><ol id="phrases-ranking"></ol></article>
       <details class="method-note"><summary>How these statistics are calculated</summary><p id="statistics-method"></p></details>
     </section>
-    <section class="catalog" aria-labelledby="catalog-title">
-      <div class="catalog-heading"><div><p class="eyebrow">Browse the corpus</p><h2 id="catalog-title">All works</h2></div><p id="result-count" aria-live="polite"></p></div>
-      <div class="catalog-controls"><label><span>Find a work</span><input id="work-search" type="search" placeholder="Author, title, or CTS URN"></label><label><span>Chunking</span><select id="chunk-filter"><option value="all">All works</option><option value="cards">Perseus cards available</option><option value="cts">CTS structure</option></select></label></div>
+    <section class="catalog" id="catalog" aria-labelledby="catalog-title">
+      <div class="catalog-heading"><div><p class="eyebrow">Browse the corpus</p><h2 id="catalog-title">All works</h2><p id="catalog-metric-note">Loading work totals…</p></div><div class="catalog-summary"><p id="result-count" aria-live="polite"></p><button id="clear-author" type="button" hidden>Show all authors</button></div></div>
+      <div class="catalog-controls"><label><span>Find a work</span><input id="work-search" type="search" placeholder="Author, title, or CTS URN"></label><label><span>Author</span><select id="author-filter"><option value="">All authors</option></select></label><label><span>Chunking</span><select id="chunk-filter"><option value="all">All works</option><option value="cards">Perseus cards available</option><option value="cts">CTS structure</option></select></label></div>
       <div class="work-list" id="work-list"></div><button class="show-more" id="show-more" type="button" hidden>Show more works</button>
     </section>
   </main>

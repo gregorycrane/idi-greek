@@ -2,14 +2,16 @@
   "use strict";
   const PAGE_SIZE = 120;
   const RANK_PAGE_SIZE = 15;
+  const initialParams = new URLSearchParams(location.search);
   const state = {
     works: [],
     query: "",
+    author: initialParams.get("author") || "",
     filter: "all",
     limit: PAGE_SIZE,
     statistics: null,
-    corpus: "both",
-    matchMode: "5",
+    corpus: ["both", "greek", "latin"].includes(initialParams.get("corpus")) ? initialParams.get("corpus") : "both",
+    matchMode: ["3", "5"].includes(initialParams.get("ngram")) ? initialParams.get("ngram") : "5",
     selectedLanguage: null,
     excludeNewTestament: false,
     rankingLimits: {
@@ -23,6 +25,7 @@
   const list = document.querySelector("#work-list");
   const resultCount = document.querySelector("#result-count");
   const showMore = document.querySelector("#show-more");
+  const authorFilter = document.querySelector("#author-filter");
 
   const number = (value, maximumFractionDigits = 0) => Number(value).toLocaleString(undefined, { maximumFractionDigits });
 
@@ -31,6 +34,33 @@
     link.href = `viewer/?work=${encodeURIComponent(work.id)}`;
     link.textContent = content;
     return link;
+  }
+
+  function authorHref(author) {
+    const params = new URLSearchParams();
+    if (state.corpus !== "both") params.set("corpus", state.corpus);
+    if (state.matchMode !== "5") params.set("ngram", state.matchMode);
+    params.set("author", author);
+    return `?${params.toString()}#catalog`;
+  }
+
+  function updateRoute() {
+    const params = new URLSearchParams();
+    if (state.corpus !== "both") params.set("corpus", state.corpus);
+    if (state.matchMode !== "5") params.set("ngram", state.matchMode);
+    if (state.author) params.set("author", state.author);
+    const query = params.toString();
+    history.replaceState(null, "", `${location.pathname}${query ? `?${query}` : ""}${state.author ? "#catalog" : ""}`);
+  }
+
+  function selectAuthor(author, scroll = false) {
+    state.author = author;
+    state.query = "";
+    state.limit = PAGE_SIZE;
+    document.querySelector("#work-search").value = "";
+    updateRoute();
+    render();
+    if (scroll) document.querySelector("#catalog").scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   function resetWorkRankingLimits() {
@@ -68,7 +98,10 @@
     listElement.replaceChildren(...authors.map((author) => {
       const item = document.createElement("li");
       const label = document.createElement("span");
-      label.textContent = author.author;
+      const link = document.createElement("a");
+      link.href = authorHref(author.author);
+      link.textContent = author.author;
+      label.append(link);
       const detail = document.createElement("small");
       detail.textContent = `${number(author.workCount)} ${author.workCount === 1 ? "work" : "works"} · ${number(author.wordCount)} words`;
       label.append(detail);
@@ -248,29 +281,83 @@
     const query = state.query.trim().toLocaleLowerCase();
     return state.works.filter((work) => {
       const corpusMatches = state.corpus === "both" || work.corpus === state.corpus;
+      const authorMatches = !state.author || work.author === state.author;
       const filterMatches = state.filter === "all" || (state.filter === "cards" ? work.hasCards : !work.hasCards);
       const queryMatches = !query || `${work.author} ${work.title} ${work.urn}`.toLocaleLowerCase().includes(query);
-      return corpusMatches && filterMatches && queryMatches;
+      return corpusMatches && authorMatches && filterMatches && queryMatches;
     });
   }
 
+  function authorOptions() {
+    return [...new Set(state.works
+      .filter((work) => state.corpus === "both" || work.corpus === state.corpus)
+      .map((work) => work.author))]
+      .sort((left, right) => left.localeCompare(right));
+  }
+
+  function renderAuthorFilter() {
+    const authors = authorOptions();
+    if (state.works.length && state.author && !authors.includes(state.author)) state.author = "";
+    const all = document.createElement("option");
+    all.value = "";
+    all.textContent = `All authors (${number(authors.length)})`;
+    authorFilter.replaceChildren(all, ...authors.map((author) => {
+      const option = document.createElement("option");
+      option.value = author;
+      option.textContent = author;
+      return option;
+    }));
+    authorFilter.value = state.author;
+  }
+
+  function currentWorkMetrics() {
+    if (!state.statistics) return new Map();
+    const mode = state.statistics.views[state.corpus].modes[state.matchMode];
+    return new Map(mode.worksAbsolute.map((work) => [work.id, work]));
+  }
+
   function render() {
+    renderAuthorFilter();
     const works = filteredWorks();
-    resultCount.textContent = `${works.length.toLocaleString()} ${works.length === 1 ? "work" : "works"}`;
+    const metrics = currentWorkMetrics();
+    document.querySelector("#catalog-title").textContent = state.author ? `Works by ${state.author}` : "All works";
+    document.querySelector("#clear-author").hidden = !state.author;
+    document.querySelector("#catalog-metric-note").textContent = state.statistics
+      ? `Totals use ${state.matchMode}+ word quotation passages; likely editions are excluded.`
+      : "Loading work totals…";
+    resultCount.textContent = `${works.length.toLocaleString()} ${works.length === 1 ? "work" : "works"}${state.author ? ` by ${state.author}` : ""}`;
     list.replaceChildren(...works.slice(0, state.limit).map((work) => {
-      const link = document.createElement("a");
-      link.className = "work-card";
-      link.href = `viewer/?work=${encodeURIComponent(work.id)}`;
-      const meta = document.createElement("p");
-      meta.textContent = work.author;
+      const card = document.createElement("article");
+      card.className = "work-card";
+      const author = document.createElement("a");
+      author.className = "work-author";
+      author.href = authorHref(work.author);
+      author.textContent = work.author;
       const title = document.createElement("h3");
-      title.textContent = work.title;
+      title.append(workLink(work, work.title));
       const urn = document.createElement("code");
       urn.textContent = work.urn;
+      const statistic = metrics.get(work.id);
+      const values = document.createElement("dl");
+      values.className = "work-metrics";
+      [
+        ["Words", statistic ? number(statistic.wordCount) : "—"],
+        ["Quotations", statistic ? number(statistic.quotationCount) : "—"],
+        ["Quotations / word", statistic && statistic.wordCount ? number(statistic.quotationCount / statistic.wordCount, 3) : "—"]
+      ].forEach(([term, value]) => {
+        const group = document.createElement("div");
+        const dt = document.createElement("dt");
+        const dd = document.createElement("dd");
+        dt.textContent = term;
+        dd.textContent = value;
+        group.append(dt, dd);
+        values.append(group);
+      });
       const badge = document.createElement("span");
+      badge.className = "work-badge";
       badge.textContent = `${work.sourceLanguageName} · ${work.hasCards ? "Perseus cards" : "CTS chunks"}`;
-      link.append(meta, title, urn, badge);
-      return link;
+      card.append(author, title, urn, values, badge);
+      return card;
     }));
     showMore.hidden = works.length <= state.limit;
     if (!showMore.hidden) showMore.textContent = `Show ${Math.min(PAGE_SIZE, works.length - state.limit)} more works`;
@@ -283,10 +370,9 @@
 
   fetch("statistics.json?v=combined-corpora-2").then((response) => response.json()).then((statistics) => {
     state.statistics = statistics;
-    state.corpus = statistics.defaultCorpus || "both";
-    state.matchMode = statistics.defaultMode || "5";
     document.querySelector("#statistics-match-mode").value = state.matchMode;
     renderStatistics(statistics);
+    render();
   }).catch(() => {
     document.querySelector("#statistics-note").textContent = "Corpus statistics could not be loaded.";
   });
@@ -297,7 +383,9 @@
       state.corpus = button.dataset.corpus;
       state.limit = PAGE_SIZE;
       state.selectedLanguage = null;
+      if (state.author && !state.works.some((work) => work.author === state.author && (state.corpus === "both" || work.corpus === state.corpus))) state.author = "";
       resetWorkRankingLimits();
+      updateRoute();
       render();
       if (state.statistics) renderStatistics(state.statistics);
     });
@@ -306,8 +394,12 @@
   document.querySelector("#statistics-match-mode").addEventListener("change", (event) => {
     state.matchMode = event.target.value;
     resetWorkRankingLimits();
+    updateRoute();
     if (state.statistics) renderStatistics(state.statistics);
+    render();
   });
+  authorFilter.addEventListener("change", (event) => selectAuthor(event.target.value, false));
+  document.querySelector("#clear-author").addEventListener("click", () => selectAuthor("", false));
   document.querySelector("#exclude-new-testament").addEventListener("change", (event) => {
     state.excludeNewTestament = event.target.checked;
     resetWorkRankingLimits();
