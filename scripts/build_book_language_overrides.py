@@ -25,9 +25,9 @@ ASSIGNMENT = re.compile(r"Object\.freeze\((\{.*\})\);", re.S)
 
 
 def track_ids() -> set[str]:
+    quote_roots = [ROOT / "docs" / "quotes", ROOT.parent / "idi-latin" / "docs" / "quotes"]
     result = subprocess.run(
-        ["rg", "--no-filename", "-o", r'"id"\s*:\s*"[^"]+"', "docs/quotes", "--glob", "tracks*.js"],
-        cwd=ROOT,
+        ["rg", "--no-filename", "-o", r'"id"\s*:\s*"[^"]+"', *map(str, quote_roots), "--glob", "tracks*.js"],
         check=True,
         capture_output=True,
         text=True,

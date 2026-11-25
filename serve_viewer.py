@@ -6,18 +6,29 @@ import re
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote, unquote, urlsplit
+
+
+LATIN_QUOTES = Path("/Users/gcrane/github/idi-latin/docs/quotes")
 
 
 class ViewerHandler(SimpleHTTPRequestHandler):
+    def translate_path(self, path):
+        pathname = unquote(urlsplit(path).path)
+        if pathname == "/latin-data" or pathname.startswith("/latin-data/"):
+            relative = Path(pathname[len("/latin-data/") :].lstrip("/"))
+            if ".." not in relative.parts:
+                return str(LATIN_QUOTES / relative)
+        return super().translate_path(path)
+
     def _redirect_passage(self):
         pathname = urlsplit(self.path).path
         cts_route = re.match(
-            r"^(.*?/quotes/)urn:cts:greekLit:(tlg\d{4})\.(tlg\d+)(?:\.[^:&/]+)?:([^&/]+)(?:&(.*))?$",
+            r"^(.*?/quotes/)urn:cts:(?:greekLit|latinLit):((?:tlg|phi|stoa)\d+)\.((?:tlg|phi|stoa)\d+)(?:\.[^:&/]+)?:([^&/]+)(?:&(.*))?$",
             pathname,
         )
         short_route = re.match(
-            r"^(.*?/quotes/(tlg\d{4})/)(tlg\d+)\.([^&/]+)(?:&(.*))?$",
+            r"^(.*?/quotes/((?:tlg|phi|stoa)\d+)/)((?:tlg|phi|stoa)\d+)\.([^&/]+)(?:&(.*))?$",
             pathname,
         )
         if cts_route:

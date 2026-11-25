@@ -4,10 +4,6 @@
   const loading = document.querySelector("#loading-state");
   const main = document.querySelector("#viewer-main");
   const localData = location.hostname === "127.0.0.1" || location.hostname === "localhost";
-  const dataRoot = localData
-    ? "../quotes/"
-    : "https://raw.githubusercontent.com/gregorycrane/idi-greek/main/docs/quotes/";
-
   function loadScript(source) {
     return new Promise((resolve, reject) => {
       const script = document.createElement("script");
@@ -61,15 +57,15 @@
     document.querySelector("#shell-work-name").href = multitextLink.href;
     const browseLinks = [
       { label: "Languages", href: multitextUrl({ home: "languages" }) },
-      { label: "Greek", href: multitextUrl({ language: "greek" }) },
-      {
+      { label: work.sourceLanguageName, href: multitextUrl({ language: work.corpus }) },
+      ...(work.corpus === "greek" ? [{
         label: "Fragments",
         href: work.authorId === "tlg0011"
           ? multitextUrl({ author: "tlg0011", scope: "fragments" })
           : multitextUrl({ collection: "aeschylus-fragments" })
-      },
+      }] : []),
       { label: `All works of ${work.author}`, href: multitextUrl({ author: work.authorId }) },
-      { label: "Tragedy", href: multitextUrl({ genre: "tragedy", language: "greek" }) },
+      ...(work.corpus === "greek" ? [{ label: "Tragedy", href: multitextUrl({ genre: "tragedy", language: "greek" }) }] : []),
       { label: "All works", href: multitextUrl({ browse: "all" }) }
     ];
     const browseNavigation = PerseusNavigation.renderBrowseNavigation({
@@ -85,10 +81,14 @@
     document.querySelector("#default-view").textContent = titleCase(catalogChunkTerm);
     document.querySelector("#chunk-count-label").textContent = `${titleCase(catalogChunkTerm)}s`;
     document.querySelector("#tei-source").href = work.tei;
+    document.querySelector("#data-repository").href = `https://github.com/gregorycrane/${work.dataRepository}`;
     document.querySelector("#viewer-note").textContent = work.hasCards
       ? "Canonical Perseus card boundaries are used for this work; CTS citations open the card containing the cited passage."
       : "Navigation follows this work’s CTS citation hierarchy; use View by to move between available prose levels.";
 
+    const dataRoot = localData
+      ? (work.corpus === "latin" ? "/latin-data/" : "../quotes/")
+      : `https://raw.githubusercontent.com/gregorycrane/${work.dataRepository}/main/docs/quotes/`;
     const base = `${dataRoot}${work.authorId}/${work.workId}/`;
     const dataSuffix = work.dataVersion ? `?v=${encodeURIComponent(work.dataVersion)}` : "";
     await loadDataScript(`${base}${work.sequenceFile || "sequence.js"}${dataSuffix}`);
@@ -100,6 +100,9 @@
       authorId: work.authorId,
       workId: work.workId,
       baseUrn: work.urn,
+      corpus: work.corpus,
+      sourceLanguage: work.sourceLanguage,
+      sourceLanguageName: work.sourceLanguageName,
       trackVariables: work.trackFiles.map((file) => file.replace(/\.js$/, "")),
       chunkTerm: work.chunkTerm,
       parentTerm: work.parentTerm,
@@ -114,7 +117,9 @@
     main.hidden = false;
     document.querySelector("#passage-navigation").hidden = false;
     loading.remove();
-    await loadScript("universal-reuse-viewer.js?v=language-periods-1");
+    document.querySelector("#phrase-title").textContent = `Most quoted ${work.sourceLanguageName} phrases`;
+    document.querySelector("#greek-text").setAttribute("aria-label", `${work.sourceLanguageName} text`);
+    await loadScript("universal-reuse-viewer.js?v=combined-corpora-1");
   }
 
   start().catch((error) => {

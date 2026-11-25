@@ -13,6 +13,7 @@
     links: [
       { label: "Languages", href: link({ home: "languages" }) },
       { label: "Greek", href: link({ language: "greek" }) },
+      { label: "Latin", href: link({ language: "latin" }) },
       { label: "Fragments", href: link({ collection: "aeschylus-fragments" }) },
       { label: "Tragedy", href: link({ genre: "tragedy", language: "greek" }) },
       { label: "All works", href: link({ browse: "all" }) }

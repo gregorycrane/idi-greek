@@ -8,6 +8,8 @@
   const BASE_URN = config.baseUrn;
   const AUTHOR_ID = config.authorId;
   const WORK_ID = config.workId;
+  const SOURCE_LANGUAGE = config.sourceLanguage || "grc";
+  const SOURCE_LANGUAGE_NAME = config.sourceLanguageName || "Greek";
   const PAGE_SIZE = 30;
   // Keep these thresholds together so partial-edition detection is explicit
   // and can be tuned as the corpus grows.
@@ -160,12 +162,14 @@
     start: match.index,
     stop: match.index + match[0].length - 1
   }));
-  const greekToken = /[\u0370-\u03ff\u1f00-\u1fff]/u;
-  const greekTokenPrefix = new Uint32Array(sourceTokens.length + 1);
+  const sourceToken = SOURCE_LANGUAGE === "lat"
+    ? /[A-Za-z\u00c0-\u024f\u1e00-\u1eff]/u
+    : /[\u0370-\u03ff\u1f00-\u1fff]/u;
+  const sourceTokenPrefix = new Uint32Array(sourceTokens.length + 1);
   sourceTokens.forEach((token, index) => {
-    greekTokenPrefix[index + 1] = greekTokenPrefix[index] + Number(greekToken.test(token.text));
+    sourceTokenPrefix[index + 1] = sourceTokenPrefix[index] + Number(sourceToken.test(token.text));
   });
-  const noteGreekWordCounts = new WeakMap();
+  const noteSourceWordCounts = new WeakMap();
   const phraseCache = new Map();
   const state = {
     chunk: 0, citation: null, language: "all", source: "quotations", query: "",
@@ -395,17 +399,17 @@
     return low;
   }
 
-  function greekWordsInNote(note) {
-    if (noteGreekWordCounts.has(note)) return noteGreekWordCounts.get(note);
+  function sourceWordsInNote(note) {
+    if (noteSourceWordCounts.has(note)) return noteSourceWordCounts.get(note);
     const first = lowerBound(sourceTokens, note.start, "start");
     const afterLast = lowerBound(sourceTokens, note.stop + 1, "stop");
-    const count = greekTokenPrefix[afterLast] - greekTokenPrefix[first];
-    noteGreekWordCounts.set(note, count);
+    const count = sourceTokenPrefix[afterLast] - sourceTokenPrefix[first];
+    noteSourceWordCounts.set(note, count);
     return count;
   }
 
   function sensitivityMatches(note) {
-    return greekWordsInNote(note) >= state.phraseLength;
+    return sourceWordsInNote(note) >= state.phraseLength;
   }
 
   function rankedPhrases() {
@@ -447,7 +451,7 @@
     [state.phraseLength].forEach((length) => {
       const strongest = [];
       for (let start = 0; start + length <= tokens.length; start += 1) {
-        if (!tokens.slice(start, start + length).every((token) => greekToken.test(token.text))) continue;
+        if (!tokens.slice(start, start + length).every((token) => sourceToken.test(token.text))) continue;
         let support = Infinity;
         for (let offset = 0; offset < length; offset += 1) {
           support = Math.min(support, coverage[start + offset]);
@@ -495,7 +499,7 @@
   function renderPhrases() {
     const result = rankedPhrases();
     elements.phraseScope.value = state.phraseScope;
-    elements.phraseStatus.textContent = `Ranked ${state.phraseLength}-word Greek phrases by passages that contain the complete phrase in ${result.scope.label}; ${result.passageCount.toLocaleString()} filtered reuse passages considered.`;
+    elements.phraseStatus.textContent = `Ranked ${state.phraseLength}-word ${SOURCE_LANGUAGE_NAME} phrases by passages that contain the complete phrase in ${result.scope.label}; ${result.passageCount.toLocaleString()} filtered reuse passages considered.`;
     if (!result.phrases.length) {
       const empty = document.createElement("p");
       empty.className = "phrase-empty";
@@ -513,7 +517,7 @@
       button.dataset.text = phrase.text;
       const text = document.createElement("span");
       text.className = "phrase-text";
-      text.lang = "grc";
+      text.lang = SOURCE_LANGUAGE;
       text.textContent = phrase.text;
       const meta = document.createElement("span");
       meta.className = "phrase-meta";
@@ -599,7 +603,7 @@
 
         const text = document.createElement("span");
         text.className = "line-text";
-        text.lang = "grc";
+        text.lang = SOURCE_LANGUAGE;
         let cursor = 0;
         tokenized[index].tokens.forEach((token) => {
           const wordStart = line.start + token.start;
@@ -770,8 +774,8 @@
   function renderReuseQuote(note) {
     const quote = document.createElement("blockquote");
     quote.className = "reuse-quote";
-    quote.lang = "grc";
-    quote.setAttribute("aria-label", "Matched Greek quotation");
+    quote.lang = SOURCE_LANGUAGE;
+    quote.setAttribute("aria-label", `Matched ${SOURCE_LANGUAGE_NAME} quotation`);
 
     const selection = state.phrase || state.word;
     const display = tokenDisplayBounds(note.start, note.stop);
